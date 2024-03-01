@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<launch>
+
+    <!--map load-->
+    <arg name="map" default="outdoor_0212_1.yaml"/>
+    <!--map server-->
+    <node pkg="map_server" type="map_server" name="map_server" args="$(find hdl_localization)/data/$(arg map)">
+    </node>
+
+    <include file="$(find hdl_localization)/launch/hdl_localization_livox.launch" />
+
+    <include file="$(find livox_ros_driver2)/launch_ROS1/rviz_MID360.launch" />
+
+
+    <node name="navigation_rviz" pkg="rviz" type="rviz" respawn="true"
+                    args="-d $(find amr_ros)/rviz/navi_2d.rviz"/>
+
+</launch>

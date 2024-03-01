@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+
+    <!--map load-->
+    <arg name="map" default="outdoor_0212_1"/>
+    <arg name="map_topic" default="/hdl_global_localization/bbs/gridmap" />
+
+    <!--map server-->
+    <node pkg="map_server" type="map_saver" name="map_saver" output="screen" args="-f $(find hdl_localization)/data/$(arg map)">
+        <remap from="/map" to="$(arg map_topic)" />
+    </node>
+
+</launch>
