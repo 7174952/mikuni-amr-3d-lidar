@@ -5,7 +5,7 @@
   <arg name="points_topic" default="/livox/lidar" />
   <!-- input clouds are transformed in odom_child_frame, and then localization is performed in that frame -->
   <!-- this is useful to match the LIDAR and IMU coodinate systems -->
-  <arg name="odom_child_frame_id" default="livox_frame" />
+  <arg name="odom_child_frame_id" default="base_link" />
 
   <!-- optional arguments -->
   <arg name="use_imu" default="true" />
@@ -14,7 +14,7 @@
   <arg name="use_global_localization" default="true" />
   <arg name="imu_topic" default="/livox/imu" />
   <arg name="enable_robot_odometry_prediction" value="true" />
-  <arg name="robot_odom_frame_id" value="livox_frame" />
+  <arg name="robot_odom_frame_id" value="base_link" />
   <arg name="plot_estimation_errors" value="false" />
 
   <include file="$(find hdl_global_localization)/launch/hdl_global_localization.launch" if="$(arg use_global_localization)" />
@@ -24,7 +24,7 @@
 
     <!-- globalmap_server_nodelet -->
     <node pkg="nodelet" type="nodelet" name="globalmap_server_nodelet" args="load hdl_localization/GlobalmapServerNodelet $(arg nodelet_manager)">
-      <param name="globalmap_pcd" value="$(find hdl_localization)/data/yuan_2_full/GlobalMap.pcd" />
+      <param name="globalmap_pcd" value="$(find amr_ros)/maps/ikeda/GlobalMap.pcd" />
       <param name="convert_utm_to_local" value="true" />
       <param name="downsample_resolution" value="0.05" />
     </node>
