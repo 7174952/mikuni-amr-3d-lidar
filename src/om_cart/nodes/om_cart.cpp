@@ -29,6 +29,9 @@
 #include "om_data.h"
 #include "om_cart.h"
 #include "std_msgs/Bool.h"
+#include "std_msgs/Float32.h"
+#include "std_msgs/String.h"
+#include "std_srvs/SetBool.h"
 
 geometry_msgs::TwistStamped msg_velocity;
 /* グローバル変数 */
@@ -41,7 +44,15 @@ ros::Publisher cart_velocity_pub;
 ros::Publisher om_query_pub;
 ros::Publisher cart_status_pub;
 
+//Define publisher amr info for jsk_rviz_plugins
+ros::Publisher cart_bat_volt_pub;
+ros::Publisher cart_vel_linear_pub;
+ros::Publisher cart_vel_radus_pub;
+ros::Publisher cart_info_rviz_pub;
+
 std::queue<om_cart::om_cart_cmd> cmd_msg_buf;
+double vel_wait_timer = 0; //Make sure to be stopped when no command arrived
+const uint32_t MAX_WAIT_TIME = 50; //50=>0.5s
 
 // long double confineRadian(long double rad);
 void om_state_callback(const om_modbus_master::om_state::ConstPtr& msg);
@@ -60,6 +71,9 @@ void cart_auto_drive_cmd_callback(const geometry_msgs::Twist::ConstPtr& cmd)
     cmd_tmp.data[1] = cmd->angular.z;
 
     cmd_msg_buf.push(cmd_tmp);
+
+    //watchdog for cmd_vel
+    vel_wait_timer = 0;
 }
 
 void cart_s_on_callback(const std_msgs::Bool::ConstPtr& state)
@@ -79,6 +93,19 @@ void om_state_callback(const om_modbus_master::om_state::ConstPtr& msg)
 
 }
 
+bool set_motor(std_srvs::SetBool::Request  &req, std_srvs::SetBool::Response &res)
+{
+    om_cart::om_cart_cmd msg;
+
+    msg.type = OPERATE;
+    msg.size = 1;
+    msg.data[0] = req.data ? S_ON : S_OFF;
+    cmd_msg_buf.push(msg);
+    res.message = "Request:" + std::to_string(req.data);
+    res.success = true;
+    return true;
+}
+
 void om_resp_callback(const om_modbus_master::om_response::ConstPtr& msg)
 {
     om_cart::om_cart_state cart_status_msg;
@@ -89,6 +116,8 @@ void om_resp_callback(const om_modbus_master::om_response::ConstPtr& msg)
     }
 
     double vel_left, vel_right, vel_line, vel_theta;
+    std_msgs::Float32 cart_val_tmp;
+    std_msgs::String cart_info_rviz_tmp;
 
     switch( msg->func_code)
     {
@@ -110,6 +139,20 @@ void om_resp_callback(const om_modbus_master::om_response::ConstPtr& msg)
                 cart_status_info.cart_status.vel_theta = vel_theta;
                 cart_status_info.cart_status.vel_left = vel_left;
                 cart_status_info.cart_status.vel_right = vel_right;
+
+                if((vel_wait_timer > MAX_WAIT_TIME) && ((std::fabs(vel_left) > 0.05) || (std::fabs(vel_right) > 0.05)))
+                {
+                    ROS_INFO("om_cart: Force to Stop AMR!");
+                    //Force cart to stop
+                    om_cart::om_cart_cmd cmd_tmp;
+                    cmd_tmp.type = SET_SPEED;
+                    cmd_tmp.size = 2;
+                    cmd_tmp.data[0] = 0.0;
+                    cmd_tmp.data[1] = 0.0;
+
+                    cmd_msg_buf.push(cmd_tmp);
+                }
+
                 cart_status_info.cart_status.alm_code_L = resp_info.Motor_Status.left.alm_code;
                 cart_status_info.cart_status.alm_code_R = resp_info.Motor_Status.right.alm_code;
                 cart_status_info.cart_status.main_power_volt_L = resp_info.Motor_Status.left.main_volt;
@@ -139,6 +182,22 @@ void om_resp_callback(const om_modbus_master::om_response::ConstPtr& msg)
                 msg_velocity.twist.linear.y  = 0;
                 msg_velocity.twist.angular.z = vel_theta;
                 cart_velocity_pub.publish(msg_velocity);
+
+                //To show on rviz by jsk_visualize_plugins
+                cart_val_tmp.data = (cart_status_info.cart_status.main_power_volt_L/10 + cart_status_info.cart_status.main_power_volt_R/10)/2;
+                cart_bat_volt_pub.publish(cart_val_tmp);
+                cart_val_tmp.data = vel_line;
+                cart_vel_linear_pub.publish(cart_val_tmp);
+                cart_val_tmp.data = vel_theta;
+                cart_vel_radus_pub.publish(cart_val_tmp);
+
+                cart_info_rviz_tmp.data = "Normal";
+                if((uint32_t)(cart_status_info.cart_status.alm_code_L != 0) || (uint32_t)(cart_status_info.cart_status.alm_code_R != 0))
+                {
+                    cart_info_rviz_tmp.data = "alm_code_left:" + std::to_string((uint32_t)(cart_status_info.cart_status.alm_code_L)) + "\n"
+                                              "alm_code_right:" + std::to_string((uint32_t)(cart_status_info.cart_status.alm_code_R));
+                }
+                cart_info_rviz_pub.publish(cart_info_rviz_tmp);
             }
             break;
         case FC_WRITE:
@@ -159,6 +218,8 @@ void om_resp_callback(const om_modbus_master::om_response::ConstPtr& msg)
 
 void cart_set_cmd_callback(const om_cart::om_cart_cmd::ConstPtr& msg)
 {
+    vel_wait_timer = 0;
+
     cmd_msg_buf.push(*msg);
 }
 
@@ -268,6 +329,15 @@ int main(int argc, char **argv)
     om_query_pub = nh.advertise<om_modbus_master::om_query>("om_query1",1);
     cart_velocity_pub = nh.advertise<geometry_msgs::TwistStamped>("vehicle_vel",100);
 
+    //Publish amr info for jsk_rviz_plugins
+    cart_bat_volt_pub = nh.advertise<std_msgs::Float32>("cart_vbat",10);
+    cart_vel_linear_pub = nh.advertise<std_msgs::Float32>("vel_linear",10);
+    cart_vel_radus_pub = nh.advertise<std_msgs::Float32>("vel_radius",10);
+    cart_info_rviz_pub = nh.advertise<std_msgs::String>("cart_info",10);
+
+    //set motor 1(lock)-0(unlock)
+    ros::ServiceServer service_srv = nh.advertiseService("motor_lock", &set_motor);
+
     //init velocity publisher
     double initTime = ros::Time::now().toSec();
     msg_velocity.header.stamp.fromSec(initTime);
@@ -300,6 +370,8 @@ int main(int argc, char **argv)
 
     while (ros::ok())
     {
+        vel_wait_timer++;
+
         update();
         ros::spinOnce();
         loop_rate.sleep();
