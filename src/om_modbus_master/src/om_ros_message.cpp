@@ -500,7 +500,7 @@ void RosMessage::queryCallback(const om_modbus_master::om_query msg)
   }
   else if(true == isCommEnabled_)
   {
-    ROS_INFO("Driver is busy");
+    //ROS_INFO("Driver is busy");
   }
 }
 
