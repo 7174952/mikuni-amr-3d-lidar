@@ -31,3 +31,4 @@
 3. 地図データは「amr_ros/maps/」のフォルダに移動した。２D/３D地図
 4. om_cartにバッテリ、速度情報を外に出す。モータのブレーキをつけ、消すサービス機能追加。
 5. fast_gicpパッケージはローカルしたあと、thirdparty.zipを解凍すること。
+6. 自主計画ルートで使うnavigation パッケージsetup:　sudo apt install ros-noetic-navigation
