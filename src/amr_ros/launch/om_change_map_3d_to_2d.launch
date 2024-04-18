@@ -1,9 +1,0 @@
-<?xml version="1.0"?>
-<launch>
-
-    <include file="$(find hdl_localization)/launch/hdl_localization_livox.launch" />
-
-    <node name="navigation_rviz" pkg="rviz" type="rviz" respawn="true"
-                    args="-d $(find amr_ros)/rviz/map_3d_2d.rviz"/>
-
-</launch>
