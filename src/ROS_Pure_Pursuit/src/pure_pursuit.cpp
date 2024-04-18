@@ -19,6 +19,7 @@
 #include <ackermann_msgs/AckermannDriveStamped.h>
 #include "visualization_msgs/Marker.h"
 #include <kdl/frames.hpp>
+#include <pure_pursuit/AutoReset2Move.h>
 
 using std::string;
 
@@ -41,6 +42,9 @@ class PurePursuit
     // Find turn back (180deg) waypoints in path
     int find_turn_back_waypoints();
     bool check_turnback_waypoints(uint idx);
+    // Set Max number to repeate
+    bool set_repeate_callback(pure_pursuit::AutoReset2Move::Request  &req, pure_pursuit::AutoReset2Move::Response &res);
+
 
     // Ros_spin.
     void run();
@@ -85,6 +89,12 @@ class PurePursuit
     tf2_ros::TransformBroadcaster tf_broadcaster_;
     geometry_msgs::TransformStamped lookahead_;
     string map_frame_id_, robot_frame_id_, lookahead_frame_id_, acker_frame_id_;
+
+    //set max number to repeate
+    double max_num_repeate_; //-1 - never stop, 0 - run until stop, 1 - run only one time, N - repeate N times
+    double goal_stop_time;
+    ros::ServiceServer repeate_srv;
+
 
 };
 
@@ -138,7 +148,10 @@ PurePursuit::PurePursuit() : lookahead_distance_(1.0), v_max_(0.2), w_max_(1.0),
   msg_goal_dist.data[0] = 0;
   msg_goal_dist.data[1] = 0.0;
 
-
+  //Init max number to repeate
+  nh_private_.getParam("max_num_repeate",max_num_repeate_);
+  repeate_srv = nh_.advertiseService("max_num_repeate", &PurePursuit::set_repeate_callback, this);
+  goal_stop_time = 0;
 }
 
 void PurePursuit::cmd_generator(nav_msgs::Odometry odom)
@@ -183,6 +196,15 @@ void PurePursuit::cmd_generator(nav_msgs::Odometry odom)
             {
                 goal_reached_ = true;
                 path_ = nav_msgs::Path(); // Reset the path
+
+                ROS_INFO("pure_pursuit: Reached Goal!");
+
+                goal_stop_time = ros::Time::now().toSec();
+                if((int16_t)max_num_repeate_ > 0)
+                {
+                    max_num_repeate_ -=1;
+                }
+
             }
             else
             {
@@ -243,7 +265,6 @@ void PurePursuit::cmd_generator(nav_msgs::Odometry odom)
                 cmd_vel_.angular.z = 0.00;
                 if(ros::Time::now().toSec() - last_time > 1.0)
                 {
-
                     state_turn = TURN_ROUND_RUN;
                 }
                 break;
@@ -299,12 +320,25 @@ void PurePursuit::cmd_generator(nav_msgs::Odometry odom)
       // Reach the goal: stop the vehicle
       else
       {
-        cmd_vel_.linear.x = 0.00;
-        cmd_vel_.angular.z = 0.00;
+          //debug
+          ROS_INFO("pure_pursuit::max_num_repeate:%d",(int16_t)max_num_repeate_);
 
-        cmd_acker_.header.stamp = ros::Time::now();
-        cmd_acker_.drive.steering_angle = 0.00;
-        cmd_acker_.drive.speed = 0.00;
+        if(((int16_t)max_num_repeate_ == 0) || (ros::Time::now().toSec() - goal_stop_time < 3.0)) //over or stop only 3 seconds
+        {
+            cmd_vel_.linear.x = 0.00;
+            cmd_vel_.angular.z = 0.00;
+
+            cmd_acker_.header.stamp = ros::Time::now();
+            cmd_acker_.drive.steering_angle = 0.00;
+            cmd_acker_.drive.speed = 0.00;
+        }
+        else //Reset and repeate to run again
+        {
+            //max_num_repeate_ <0 means never stop
+            idx_ = 0;
+            idx_memory = 0;
+            goal_reached_ = false;
+        }
       }
 
       // Publish the lookahead target transform.
@@ -359,6 +393,22 @@ void PurePursuit::cmd_generator(nav_msgs::Odometry odom)
       ROS_WARN_STREAM(ex.what());
     }
   }
+}
+
+bool PurePursuit::set_repeate_callback(pure_pursuit::AutoReset2Move::Request  &req, pure_pursuit::AutoReset2Move::Response &res)
+{
+    max_num_repeate_ = req.max_num_repeate;
+
+    if(req.max_num_repeate == -1)
+    {
+        ROS_INFO("pure_pursuit: Set AMR to auto repeate!");
+    }
+    else
+    {
+        ROS_INFO("pure_pursuit: Set AMR to Repeate: %d times", req.max_num_repeate);
+    }
+    res.success = true;
+    return true;
 }
 
 int PurePursuit::find_turn_back_waypoints()
