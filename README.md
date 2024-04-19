@@ -30,7 +30,9 @@
   ■ Install方法：
   
 　　　- sudo apt install libbullet-dev libsdl-image1.2-dev libsdl-dev
+   
      - sudo apt install ros-noetic-navigation
+     
      - sudo apt install ros-noetic-geometry2
      
 6. 2d地図生成パッケージ：gmapping
