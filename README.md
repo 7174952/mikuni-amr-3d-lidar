@@ -16,7 +16,7 @@
   ※　依存パッケージ：pcl_ros、ndt_omp、fast_gicp、hdl_global_localization
   
 3. MID360 LiDARドライバ：livox_ros_driver2
-4. 
+   
   ■ 原始ソース：https://github.com/Livox-SDK/livox_ros_driver2
 
   ■ Install方法と注意事項、パラメータ設定方法：https://github.com/Livox-SDK/livox_ros_driver2
