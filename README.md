@@ -49,6 +49,9 @@
     
    ■ 仕様書：https://www.orientalmotor.com/support/ROS_Package_Technical_Material_ver_4.pdf
 
+   ■ 原始ソース：https://www.orientalmotor.co.jp/ja/support/connection-partners
+   「対象メーカ」 => 「ROS」＝＞「ROS1用Nodeom_modbus_master_V108」※登録必要 
+
 /************2024/04/18**更新内容*******************************/
 1. 自主計画ルート走行を入れた。
 2. fast-lio2での地図生成パッケージを削除した
