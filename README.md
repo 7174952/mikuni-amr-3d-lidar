@@ -68,5 +68,7 @@
 2)fast-lioパッケージ：①閉じ込めない問題有る　②生成地図データサイズ大き過ぎ　③地図生成時、振動有る場合、ソフト崩れやすいため、評価中止
 
 3)各パッケージの変更内容は、原始ソースコードを比較すると見やすくなる
-4)ソースRebuild方法：rebuild　＝＞ build　※rebuildは1回してから、buildは4回繰り返したら、エラーがなくなる。
 
+4)ソースRebuildでのエラーの解決方法：rebuild　＝＞ build　※rebuildは1回して、buildは4回繰り返したら、エラーがなくなる。
+
+5)usb-rs485ケーブルはpcで自動に認識できなければ、次のシナリオを実施すること： catkin_ws/src/amr_ros/scripts/amr_start.sh
