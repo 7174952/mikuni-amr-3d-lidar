@@ -35,17 +35,17 @@
      
      - sudo apt install ros-noetic-geometry2
      
-6. 2d地図生成パッケージ：gmapping
+5. 2d地図生成パッケージ：gmapping
    
    - Install方法: sudo apt install ros-noetic-gmapping
      
-8. ルート追従パッケージ：ROS_Pure_Pursuit
+6. ルート追従パッケージ：ROS_Pure_Pursuit
    
    ■原始コード：https://github.com/leofansq/ROS_Pure_Pursuit
    
    ■ ビルド、使用方法：https://github.com/leofansq/ROS_Pure_Pursuit
    
-10. モータ駆動ソフトパッケージ：om_modbus_master
+7. モータ駆動ソフトパッケージ：om_modbus_master
     
    ■ 仕様書：https://www.orientalmotor.com/support/ROS_Package_Technical_Material_ver_4.pdf
 
