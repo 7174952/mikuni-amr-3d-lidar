@@ -34,9 +34,9 @@ int32_t obstacle_points_num = 0;
 int32_t obstacle_lim = 0;
 
 //sonar
-double sonar_dist_left = 0.0;
-double sonar_dist_center = 0.0;
-double sonar_dist_right = 0.0;
+double sonar_dist_left = 4.0;
+double sonar_dist_center = 4.0;
+double sonar_dist_right = 4.0;
 #define SONAR_MIN_DIST 0.30 //30cm
 
 pcl::PointCloud<pcl::PointXYZ>::Ptr unslice(pcl::PointCloud<pcl::PointXYZ>::Ptr& points)
