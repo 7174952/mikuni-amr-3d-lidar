@@ -1,3 +1,11 @@
+NOTE: 2024/10/25 Add log function
+・やり方：1) 保存フォルダ作成：/home/mikuni/cart_log
+        2) amr_ros/nodes/save_cart_log.cpp：ローカルＰＣで同じフォルダに入れて、システムをリビルトすること
+        3) 以前と同じでamr関連Lanuchファイルを起動
+        4) 追加で新規ノード実行、ターミナル: $rosrun amr_ros save_cart_lo
+        5）ログ保存場所でログを確認する。場所：/home/mikuni/cart_log
+        6）内容は分かりづらい場合、excelで開いて、”；”で分割すること
+
 
 環境構築 2024/4/19
 
