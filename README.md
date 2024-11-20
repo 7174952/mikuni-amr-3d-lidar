@@ -1,3 +1,17 @@
+2024/11/20 GUI処理機能追加
+
+１．gui画面で地図生成できた
+
+２．gui画面で指定ルート生成できた
+
+３．gui画面で手動で走行シナリオ作成できた
+
+４．gui画面操作で自律走行できた
+
+注意：a.MID360 LidarのIPは正しいIP変更必要。場所：livox_ros_driver2/config/MID360_config.json
+
+     b.テストは不十分のため、条件によって動かないや、ソフト崩れるなど場合がある。継続更新する予定。
+
 NOTE: 2024/10/25 Add log function
 
 ・やり方：1) 保存フォルダ作成：/home/mikuni/cart_log
