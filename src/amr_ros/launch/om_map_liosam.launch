@@ -14,10 +14,10 @@
         <param name="odom_frame" value="odom" />
         <param name="map_frame"  value="map" />
     </node>
-
+<!--
     <node name="usb_cam_node" pkg="usb_cam" type="usb_cam_node" args="_video_device:=/dev/video2">
     </node>
-
+-->
     <node pkg="tf" type="static_transform_publisher" name="map_to_odom" args="0 0 0 0 0 0 map odom 100"/>
 
     <!--LIO-SAM-->

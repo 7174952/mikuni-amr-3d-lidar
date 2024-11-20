@@ -18,6 +18,3 @@ source ~/catkin_ws/devel/setup.bash
 
 killall om_cart
 killall om_modbusRTU_no
-#killall roslaunch
-
-#roslaunch amr_ros amr_default_start.launch

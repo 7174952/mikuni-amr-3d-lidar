@@ -3,21 +3,34 @@
 
 <include file="$(find om_modbus_master)/launch/om_modbusRTU.launch"/>
 
-<node pkg="om_cart" name="om_cart" type="om_cart">
-
-</node>
+<node pkg="om_cart" name="om_cart" type="om_cart"/>
 
 <!--map load-->
-<arg name="static_map" default="ikeda/ikeda_map.yaml"/>
+<arg name="static_map" default="rd_test1"/>
+<!--init pose-->
+<arg name="p_x" default="0"/>
+<arg name="p_y" default="0"/>
+<arg name="o_z" default="0"/>
+<arg name="o_w" default="1.0"/>
+
+<!--cmd_vel topic-->
+<arg name="cmd_vel" default="cmd_vel"/>
+
 <!--map server-->
-<node pkg="map_server" type="map_server" name="map_server" args="$(find amr_ros)/maps/$(arg static_map)">
-</node>
+<node pkg="map_server" type="map_server" name="map_server" args="$(find amr_ros)/maps/$(arg static_map)/$(arg static_map).yaml"/>
 
+<include file="$(find hdl_localization)/launch/hdl_localization_livox.launch">
+ <arg name="pcd_set" value="$(arg static_map)"/>
+ <arg name="init_px" value="$(arg p_x)"/>
+ <arg name="init_py" value="$(arg p_y)"/>
+ <arg name="init_oz" value="$(arg o_z)"/>
+ <arg name="init_ow" value="$(arg o_w)"/>
+</include>
 
-<include file="$(find hdl_localization)/launch/hdl_localization_livox.launch" />
-
+<!--
 <param name="waypoint_path" value="$(find amr_ros)/maps/ikeda/ikeda_waypoints.txt"/>
 <node name="load_waypoints" pkg="amr_ros" type="load_waypoints.py" output="screen"/>
+-->
 
 <!--trajectry -->
 <include file="$(find pure_pursuit)/launch/pure_pursuit_node.launch" />
@@ -29,16 +42,12 @@
     <param name="obstacle_lim" value="10" />
 </node>
 
+<!--
 <node name="usb_cam_node" pkg="usb_cam" type="usb_cam_node" args="_video_device:=/dev/video2">
-
 </node>
+-->
 
 <node pkg="tf" type="static_transform_publisher" name="base_link_to_livox_frame" args="0.23 0 0 0 0 0 base_link livox_frame 10"/>
-
-<node pkg="tf" type="static_transform_publisher" name="base_link_to_sonar_center" args="0 0.1 0.5 0 0 0 base_link sonar_frame_center 10"/>
-<node pkg="tf" type="static_transform_publisher" name="base_link_to_sonar_left" args="0 0.3 0 0 0 0 base_link sonar_frame_left 10"/>
-<node pkg="tf" type="static_transform_publisher" name="base_link_to_sonar_right" args="0 -0.3 0 0 0 0 base_link sonar_frame_right 10"/>
-
 
 <!--Start 3DLidar -->
 <include file="$(find livox_ros_driver2)/launch_ROS1/rviz_MID360.launch" />

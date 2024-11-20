@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<launch>
+
+    <arg name="route_script_name" default="/home/mikuni/catkin_ws/src/amr_ros/maps/rd_test1/navi_route/navi_script_start_start4.txt"/>
+    <node name="load_waypoint" pkg="amr_ros" type="load_waypoint" output="screen">
+        <param name="waypoint_path" value="$(arg route_script_name)"/>
+    </node>
+
+</launch>
