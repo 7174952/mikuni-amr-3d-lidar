@@ -9,7 +9,7 @@
 	<arg name="publish_freq" default="10.0"/>
 	<arg name="output_type" default="0"/>
 	<arg name="rviz_enable" default="false"/>
-        <arg name="rosbag_enable" default="true"/>
+        <arg name="rosbag_enable" default="false"/>
 	<arg name="cmdline_arg" default="$(arg bd_list)"/>
 	<arg name="msg_frame_id" default="livox_frame"/>
 	<arg name="lidar_bag" default="true"/>
@@ -30,7 +30,7 @@
 
 	<node name="livox_lidar_publisher2" pkg="livox_ros_driver2"
 	      type="livox_ros_driver2_node" required="true"
-              output="screen" args="$(arg cmdline_arg)"/>
+              args="$(arg cmdline_arg)"/>
 
 	<group if="$(arg rosbag_enable)">
         <node pkg="rosbag" type="record" name="record" output="screen"
