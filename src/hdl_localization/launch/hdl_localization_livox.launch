@@ -1,8 +1,13 @@
 <?xml version="1.0"?>
 <launch>
   <!-- arguments -->
+  <arg name="pcd_set" default="Takisawa_Factory_1F"/>
   <arg name="nodelet_manager" default="livox_nodelet_manager" />
   <arg name="points_topic" default="/livox/lidar" />
+  <arg name="init_px" default="0.0"/>
+  <arg name="init_py" default="0.0"/>
+  <arg name="init_oz" default="0.0"/>
+  <arg name="init_ow" default="1.0"/>
   <!-- input clouds are transformed in odom_child_frame, and then localization is performed in that frame -->
   <!-- this is useful to match the LIDAR and IMU coodinate systems -->
   <arg name="odom_child_frame_id" default="base_link" />
@@ -24,7 +29,7 @@
 
     <!-- globalmap_server_nodelet -->
     <node pkg="nodelet" type="nodelet" name="globalmap_server_nodelet" args="load hdl_localization/GlobalmapServerNodelet $(arg nodelet_manager)">
-      <param name="globalmap_pcd" value="$(find amr_ros)/maps/ikeda/GlobalMap.pcd" />
+      <param name="globalmap_pcd" value="$(find amr_ros)/maps/$(arg pcd_set)/GlobalMap.pcd" />
       <param name="convert_utm_to_local" value="true" />
       <param name="downsample_resolution" value="0.05" />
     </node>
@@ -55,13 +60,13 @@
       <!-- if "specify_init_pose" is true, pose estimator will be initialized with the following params -->
       <!-- otherwise, you need to input an initial pose with "2D Pose Estimate" on rviz" -->
       <param name="specify_init_pose" value="true" />
-      <param name="init_pos_x" value="0.0" />
-      <param name="init_pos_y" value="0.0" />
+      <param name="init_pos_x" value="$(arg init_px)" />
+      <param name="init_pos_y" value="$(arg init_py)" />
       <param name="init_pos_z" value="0.0" />
-      <param name="init_ori_w" value="1.0" />
+      <param name="init_ori_w" value="$(arg init_ow)" />
       <param name="init_ori_x" value="0.0" />
       <param name="init_ori_y" value="0.0" />
-      <param name="init_ori_z" value="0.0" />
+      <param name="init_ori_z" value="$(arg init_oz)" />
 
       <param name="use_global_localization" value="$(arg use_global_localization)" />
     </node>
