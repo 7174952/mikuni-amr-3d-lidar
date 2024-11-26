@@ -4,6 +4,7 @@
 #include <geometry_msgs/Twist.h>
 #include <std_msgs/Float32MultiArray.h>
 #include <sensor_msgs/Range.h>
+#include <std_msgs/String.h>
 
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
@@ -15,14 +16,17 @@
 #include <pcl/filters/passthrough.h>
 
 #include <Eigen/Dense>
-
 #include <cmath>
+
+#include <QString>
+#include <QList>
+#include <QRegularExpression>
+#include <QDebug>
 
 double OBST_HIGHT_MIN_Z = -0.1; //default: -0.1
 double OBST_HIGHT_MAX_Z = 1.0;  //default: 1.0
 
 ros::Publisher pub_close_points;
-//ros::Publisher pub_slice_points;
 ros::Publisher pub_cmd_vel;
 
 double linear_velocity = 0;
@@ -33,11 +37,21 @@ bool is_near_goal = false;
 int32_t obstacle_points_num = 0;
 int32_t obstacle_lim = 0;
 
-//sonar
-double sonar_dist_left = 4.0;
-double sonar_dist_center = 4.0;
-double sonar_dist_right = 4.0;
-#define SONAR_MIN_DIST 0.30 //30cm
+//Control speed by the distance of person behind of cart
+struct Speed_Ctrl
+{
+    bool guide_enable;
+    double idealDistance;
+    double stopDistance;
+    double kp;
+};
+Speed_Ctrl speed_ctrl;
+double currentDistance;
+uint person_num;
+uint person_num_curr;
+uint person_num_last;
+int detect_cnt = -1;
+const uint DETECT_MAX_TIMES = 5;
 
 pcl::PointCloud<pcl::PointXYZ>::Ptr unslice(pcl::PointCloud<pcl::PointXYZ>::Ptr& points)
 {
@@ -56,7 +70,7 @@ double calculateSpeedReduction()
 {
     double speed_rate = 0;
 
-    if ((obstacle_points_num > obstacle_lim) || (sonar_dist_center < SONAR_MIN_DIST))
+    if (obstacle_points_num > obstacle_lim)
     {
         speed_rate = 0;
     }
@@ -68,22 +82,47 @@ double calculateSpeedReduction()
     return speed_rate;
 }
 
-void sonarLeftCallback(const sensor_msgs::RangeConstPtr& msg)
+void personInfoCallback(const std_msgs::String::ConstPtr& msg)
 {
-    sonar_dist_left = msg->range;
-}
+    QString person_msg = QString::fromStdString(msg->data);
+    if(person_msg.isEmpty()) return;
 
-void sonarCenterCallback(const sensor_msgs::RangeConstPtr& msg)
-{
-    sonar_dist_center = msg->range;
-    ROS_INFO("detect_obst: sonar_center:%.3f",sonar_dist_center);
-}
+    double nearDistance = qInf();
+    QStringList persons = person_msg.trimmed().split(QRegularExpression("[!;]+"));
+    person_num_curr = persons.takeFirst().split(" ").at(1).toUInt();
+    if((person_num_curr == 0 && person_num_last > 0) || (person_num_curr > 0 && person_num_last == 0))
+    {
+        detect_cnt = 0;
+    }
+    else
+    {
+        if(detect_cnt >= 0)
+            detect_cnt++;
+    }
 
-void sonarRightCallback(const sensor_msgs::RangeConstPtr& msg)
-{
-    sonar_dist_right = msg->range;
-}
+    if(detect_cnt > DETECT_MAX_TIMES)
+    {
+        person_num = person_num_curr;
+        // if(persons.isEmpty()) return;
+        if(person_num > 0)
+        {
+            //find the nearest person
+            for(const QString& record : persons)
+            {
+                QStringList str_tmp = record.trimmed().split(QRegularExpression("[:= ]+"));
 
+                nearDistance = qMin(str_tmp.at(str_tmp.indexOf("Distance") + 1).toDouble(), nearDistance);
+
+            }
+
+            currentDistance = nearDistance;
+        }
+
+    }
+
+    person_num_last = person_num_curr;
+
+}
 
 void cloudCB(const sensor_msgs::PointCloud2ConstPtr& input)
 {
@@ -199,11 +238,41 @@ void cmdrawCallback(const geometry_msgs::Twist::ConstPtr& msg)
         linear_velocity = msg->linear.x;
     }
 
-    //update speed cmd
+    double guide_speed_rate = 1.0;
+    if(speed_ctrl.guide_enable)
+    {
+        guide_speed_rate = 0;
+        if(person_num > 0)
+        {
+            double dist_error = speed_ctrl.stopDistance - currentDistance;
+            double rate = dist_error/(speed_ctrl.stopDistance - speed_ctrl.idealDistance);
+            if(rate < 0)
+            {
+                rate = 0;
+            }
+            if(rate > 1)
+            {
+                rate = 1;
+            }
+
+            guide_speed_rate = speed_ctrl.kp * rate;
+
+            qDebug() << "currentDistance:" << currentDistance << "dist_error:" << dist_error << "rate:" << guide_speed_rate << "\n";
+        }
+    }
+    //update speed cmd by
     geometry_msgs::Twist cmd_vel;
     double reduction_ratio = calculateSpeedReduction();
     cmd_vel.linear.x = msg->linear.x * reduction_ratio;
     cmd_vel.angular.z = msg->angular.z * reduction_ratio;
+
+    //update by people's distance behind cart
+    if(speed_ctrl.guide_enable)
+    {
+        cmd_vel.linear.x = guide_speed_rate * cmd_vel.linear.x;
+        cmd_vel.angular.z = guide_speed_rate * cmd_vel.angular.z;
+    }
+
     pub_cmd_vel.publish(cmd_vel);
 
 }
@@ -225,6 +294,10 @@ int main (int argc, char** argv)
         obstacle_lim = 10;
         ROS_WARN("Failed to get param 'obstacle_lim'");
     }
+    nh.param("guide_enable", speed_ctrl.guide_enable, false);
+    nh.param("idealDistance", speed_ctrl.idealDistance, 2.0);
+    nh.param("stopDistance", speed_ctrl.stopDistance, 4.0);
+    nh.param("kp", speed_ctrl.kp, 1.0);
 
     pub_close_points = nh.advertise<sensor_msgs::PointCloud2>("/obstacle_points", 10);
 
@@ -234,10 +307,8 @@ int main (int argc, char** argv)
     ros::Subscriber sub_points = nh.subscribe ("/livox/lidar", 10, cloudCB);
     ros::Subscriber sub_cmdraw = nh.subscribe("/cmd_raw", 10, cmdrawCallback);
     ros::Subscriber sub_goal_dist = nh.subscribe("/goal_dist",10,goalDistCallback);
-    //detect obstacle by sonar
-    ros::Subscriber sub_sonar_left = nh.subscribe("/scan_sonar_left",10, sonarLeftCallback);
-    ros::Subscriber sub_sonar_center = nh.subscribe("/scan_sonar_center",10, sonarCenterCallback);
-    ros::Subscriber sub_sonar_right = nh.subscribe("/scan_sonar_right",10, sonarRightCallback);
+    //detect person and distance
+    ros::Subscriber sub_back_person_info = nh.subscribe("/person_detection_info",10, personInfoCallback);
 
     ros::spin ();
 
