@@ -53,6 +53,15 @@ uint person_num_last;
 int detect_cnt = -1;
 const uint DETECT_MAX_TIMES = 5;
 
+//control by user voice command
+struct Voice_Ctrl
+{
+    bool voice_ctrl_enable;
+    bool start_cart;
+
+};
+Voice_Ctrl voice_ctrl;
+
 pcl::PointCloud<pcl::PointXYZ>::Ptr unslice(pcl::PointCloud<pcl::PointXYZ>::Ptr& points)
 {
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
@@ -80,6 +89,24 @@ double calculateSpeedReduction()
     }
 
     return speed_rate;
+}
+
+void voiceCtrlCallback(const std_msgs::String::ConstPtr& cmd)
+{
+    qDebug() << "detect obstacle > robot voice cmd:" << QString::fromStdString(cmd->data) << "\n";
+
+    if(cmd->data == "start")
+    {
+        voice_ctrl.start_cart = true;
+    }
+    else if(cmd->data == "stop")
+    {
+        voice_ctrl.start_cart = false;
+    }
+    else
+    {
+        //do nothing
+    }
 }
 
 void personInfoCallback(const std_msgs::String::ConstPtr& msg)
@@ -239,6 +266,7 @@ void cmdrawCallback(const geometry_msgs::Twist::ConstPtr& msg)
     }
 
     double guide_speed_rate = 1.0;
+
     if(speed_ctrl.guide_enable)
     {
         guide_speed_rate = 0;
@@ -260,6 +288,7 @@ void cmdrawCallback(const geometry_msgs::Twist::ConstPtr& msg)
             qDebug() << "currentDistance:" << currentDistance << "dist_error:" << dist_error << "rate:" << guide_speed_rate << "\n";
         }
     }
+
     //update speed cmd by
     geometry_msgs::Twist cmd_vel;
     double reduction_ratio = calculateSpeedReduction();
@@ -271,6 +300,16 @@ void cmdrawCallback(const geometry_msgs::Twist::ConstPtr& msg)
     {
         cmd_vel.linear.x = guide_speed_rate * cmd_vel.linear.x;
         cmd_vel.angular.z = guide_speed_rate * cmd_vel.angular.z;
+    }
+
+    //update by voice control comamnd
+    if(voice_ctrl.voice_ctrl_enable)
+    {
+        if(voice_ctrl.start_cart == false)
+        {
+            cmd_vel.linear.x = 0;
+            cmd_vel.angular.z = 0;
+        }
     }
 
     pub_cmd_vel.publish(cmd_vel);
@@ -294,10 +333,13 @@ int main (int argc, char** argv)
         obstacle_lim = 10;
         ROS_WARN("Failed to get param 'obstacle_lim'");
     }
+    speed_ctrl.guide_enable = false;
     nh.param("guide_enable", speed_ctrl.guide_enable, false);
     nh.param("idealDistance", speed_ctrl.idealDistance, 2.0);
     nh.param("stopDistance", speed_ctrl.stopDistance, 4.0);
     nh.param("kp", speed_ctrl.kp, 1.0);
+    voice_ctrl.voice_ctrl_enable = false;
+    nh.param("voice_ctrl_enable", voice_ctrl.voice_ctrl_enable, false);
 
     pub_close_points = nh.advertise<sensor_msgs::PointCloud2>("/obstacle_points", 10);
 
@@ -309,6 +351,9 @@ int main (int argc, char** argv)
     ros::Subscriber sub_goal_dist = nh.subscribe("/goal_dist",10,goalDistCallback);
     //detect person and distance
     ros::Subscriber sub_back_person_info = nh.subscribe("/person_detection_info",10, personInfoCallback);
+    //wait voice control command
+    ros::Subscriber sub_voice_ctrl = nh.subscribe("/robot_ctrl_cmd",10, voiceCtrlCallback);
+    voice_ctrl.start_cart = true;
 
     ros::spin ();
 

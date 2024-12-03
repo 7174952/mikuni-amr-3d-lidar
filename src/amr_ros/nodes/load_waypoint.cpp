@@ -179,7 +179,7 @@ int main(int argc, char** argv)
     }
 
     nav_msgs::Path waypoints_info;
-    QString sub_route_dir = QString::fromStdString(waypoint_path).replace("navi_route","waypoints");
+    QString sub_route_dir = QString::fromStdString(waypoint_path).replace("navi_route","base_route");
     sub_route_dir = sub_route_dir.left(sub_route_dir.lastIndexOf("/"));
 
 
