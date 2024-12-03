@@ -22,7 +22,7 @@ config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)  # 深度ス�
 pipeline.start(config)
 
 # YOLOモデルの初期化（YOLOv8を使用）
-model = torch.hub.load('ultralytics/yolov5', 'yolov5m')  # 'yolov5m'、'yolov5l'などに置き換えることが可能
+model = torch.hub.load('ultralytics/yolov5', 'yolov5s')  # 'yolov5m'、'yolov5l'などに置き換えることが可能
 
 # CUDAの有効化（利用可能な場合）
 if torch.cuda.is_available():
