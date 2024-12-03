@@ -6,9 +6,11 @@ set(ROS_DEPENDS
   )
 set(EXTERNAL_DEPENDS
   Qt5Widgets
+  Qt5Multimedia
   )
 set(EXTERNAL_DEPENDS_LIB
   Qt5::Widgets
+  Qt5::Multimedia
   ) 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 foreach(DEPEND ${EXTERNAL_DEPENDS})

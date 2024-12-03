@@ -16,7 +16,9 @@
 #include <QList>
 #include <QVBoxLayout>
 #include <QButtonGroup>
-#include <QFileDialog>
+#include <QtMultimedia/QMediaPlayer>
+#include <QtMultimedia/QMediaPlaylist>
+#include <QThread>
 
 #include <sys/stat.h>
 
@@ -40,10 +42,8 @@ class MainWindow : public QWidget
     ros::Publisher pub_goal_;
     ros::Subscriber sub_odom_;
     ros::Subscriber sub_reach_goal_;
-    ros::Subscriber sub_count_;
     ros::Subscriber sub_voice_order_;
-    ros::Subscriber sub_person_;
-
+    ros::Subscriber sub_music_ctrl;
 
 public:
     explicit MainWindow(QWidget *parent = nullptr);
@@ -52,10 +52,8 @@ public:
     void start_process(QProcess*, QString);
     void closeEvent(QCloseEvent*);
     void Odometry_CallBack(const nav_msgs::Odometry&);
-    void Count_CallBack(const std_msgs::Int32&);
 
-    void Conv_Cmd_CallBack(const std_msgs::String&);
-    void Person_CallBack(const std_msgs::String&);
+    void Music_Ctrl_CallBack(const std_msgs::String::ConstPtr&);
     void Start_Close_Mapping();
     bool Save_Map();
     void Copy_3D_Data();
@@ -69,9 +67,10 @@ public:
     QProcess* launchMakeRouteProcess;
     QProcess* launchNaviProcess;
     QProcess* launchNaviLoadRouteProcess;
+    QProcess* launchNaviVoiceCtrlEnvProcess;
 
     // QVector<QProcess *> proc_amr;
-    QVector<QString> Data_3D;
+    QString map_3d;
     QVector<QString> pose_para;
     QString RootPath;
 
@@ -162,5 +161,6 @@ private slots:
 private:
     Ui::MainWindow *ui;
     void Startup_Joy(bool);
+    QMediaPlayer *player;
 };
 #endif // MAINWINDOW_H

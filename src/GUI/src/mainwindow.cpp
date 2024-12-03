@@ -7,21 +7,15 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    execute_shell_cmd("bash ~/Desktop/amr_start.sh");
+    execute_shell_cmd("bash ~/catkin_ws/src/amr_ros/scripts/amr_start.sh");
 
     sub_odom_        = nh_.subscribe("/odom", 1, &MainWindow::Odometry_CallBack, this);
-    sub_count_       = nh_.subscribe("/count_up", 1, &MainWindow::Count_CallBack, this);
-    sub_person_      = nh_.subscribe("/person", 1, &MainWindow::Person_CallBack, this);
     pub_goal_        = nh_.advertise<std_msgs::Float32>("goal_cmd",10);
+    sub_music_ctrl   = nh_.subscribe("/music_cmd",1, &MainWindow::Music_Ctrl_CallBack, this);
 
     //Set 3D data file name
-    Data_3D.resize(5);
     RootPath   = "/home/mikuni/";
-    Data_3D[0] = "catkin_ws/src/LIO-SAM-MID360/LOAM/CornerMap.pcd";
-    Data_3D[1] = "catkin_ws/src/LIO-SAM-MID360/LOAM/GlobalMap.pcd";
-    Data_3D[2] = "catkin_ws/src/LIO-SAM-MID360/LOAM/SurfMap.pcd";
-    Data_3D[3] = "catkin_ws/src/LIO-SAM-MID360/LOAM/trajectory.pcd";
-    Data_3D[4] = "catkin_ws/src/LIO-SAM-MID360/LOAM/transformations.pcd";
+    map_3d = "catkin_ws/src/LIO-SAM-MID360/LOAM/GlobalMap.pcd";
 
     pose_para.resize(7);
 
@@ -32,19 +26,19 @@ MainWindow::MainWindow(QWidget *parent)
     launchNaviProcess = new QProcess(this);
     launchMakeRouteProcess = new QProcess(this);
     launchNaviLoadRouteProcess = new QProcess(this);
+    launchNaviVoiceCtrlEnvProcess = new QProcess(this);
+
     ros_process.push_back(launchManualCtrlProcess);
     ros_process.push_back(launchLiosamProcess);
     ros_process.push_back(launchChatgptProcess);
     ros_process.push_back(launchMakeRouteProcess);
     ros_process.push_back(launchNaviProcess);
     ros_process.push_back(launchNaviLoadRouteProcess);
+    ros_process.push_back(launchNaviVoiceCtrlEnvProcess);
 
     groupBoxLayout_navi = new QVBoxLayout(ui->groupBox_Navi_Waypoints);
 
     buttonGroup_navi = new QButtonGroup(this);
-
-    //startup chatgpt
-    start_process(launchChatgptProcess, "cd ~/catkin_ws/src/amr_ros/scripts && python3 GPT_talker_ros.py");
 
     //Regist navi object
     ui->pushButton_Navi_StartUp->setDisabled(false);
@@ -56,6 +50,16 @@ MainWindow::MainWindow(QWidget *parent)
 
     last_point.resize(7);
     last_point.fill(0.0);
+
+    //Play music
+    player = new QMediaPlayer(this);
+    // 创建 QMediaPlaylist 播放列表对象
+    QMediaPlaylist *playlist = new QMediaPlaylist;
+    playlist->addMedia(QUrl::fromLocalFile(RootPath + "catkin_ws/src/amr_ros/scripts/running_back_music.mp3"));
+    // 设置播放模式为循环播放
+    playlist->setPlaybackMode(QMediaPlaylist::Loop);
+    // 将播放列表设置为播放器的播放源
+    player->setPlaylist(playlist);
 
 }
 
@@ -87,12 +91,25 @@ void MainWindow::closeEvent(QCloseEvent *event)
     }
 }
 
-void MainWindow::Person_CallBack(const std_msgs::String& msg)
+void MainWindow::Music_Ctrl_CallBack(const std_msgs::String::ConstPtr& msg)
 {
-    if((person_state == 0) && ((msg.data == "RUN") || (msg.data == "STOP")))
+    qDebug() << "gui music command:" << QString::fromStdString(msg->data) << "\n";
+
+    if(msg->data == "play")
     {
-        qDebug() << "Check:Perosn";
-        person_state = 1;
+        player->play();
+    }
+    else if(msg->data == "stop")
+    {
+        player->stop();
+    }
+    else if(msg->data == "pause")
+    {
+        player->pause();
+    }
+    else
+    {
+        //do nothing
     }
 }
 
@@ -147,20 +164,6 @@ void MainWindow::Odometry_CallBack(const nav_msgs::Odometry& odom)
             route_distance += distance;
         }
     }
-}
-
-void MainWindow::Count_CallBack(const std_msgs::Int32& count_up)
-{
-#if 0
-    if(count_up.data >= 5)
-    {
-        cmd_exe("vlc ~/Music/doite.wav",proc_amr[12]);
-    }
-    else if(count_up.data == -10)
-    {
-        kill_process(12);
-    }
-#endif
 }
 
 QString MainWindow::execute_shell_cmd(QString Cmd)
@@ -293,11 +296,7 @@ void MainWindow::on_pushButton_Map_Startup_clicked()
         }
         break;
     case MAKE_MAP_FINISH://Finish
-        if(    QFile::exists(RootPath + Data_3D[0])
-            && QFile::exists(RootPath + Data_3D[1])
-            && QFile::exists(RootPath + Data_3D[2])
-            && QFile::exists(RootPath + Data_3D[3])
-            && QFile::exists(RootPath + Data_3D[4]))
+        if(QFile::exists(RootPath + map_3d))
         {
             ui->pushButton_Map_Startup->setText("Start");
             ui->pushButton_Route_Startup->setDisabled(false);
@@ -356,7 +355,7 @@ bool MainWindow::Save_Map()
 void MainWindow::Copy_3D_Data()
 {
     QString buf_string = ui->lineEdit_MapName_MapMaker->text();
-    execute_shell_cmd("mv ~/catkin_ws/src/LIO-SAM-MID360/LOAM/*pcd ~/catkin_ws/src/amr_ros/maps/" + buf_string + "/.");
+    execute_shell_cmd("mv ~/catkin_ws/src/LIO-SAM-MID360/LOAM/GlobalMap.pcd ~/catkin_ws/src/amr_ros/maps/" + buf_string + "/.");
 }
 
 //Make Route
@@ -467,8 +466,8 @@ void MainWindow::on_pushButton_Route_Startup_clicked()
         is_route_maker_running = false;
     }
 
-    //Create folder /waypoints, /route
-    QString path_name = ui->lineEdit_Directory->text() + ui->lineEdit_MapName_MapMaker->text() + "/waypoints";
+    //Create folder /base_route, /route
+    QString path_name = ui->lineEdit_Directory->text() + ui->lineEdit_MapName_MapMaker->text() + "/base_route";
     QDir dir;
 
     if(!dir.exists(path_name))
@@ -631,7 +630,7 @@ void MainWindow::on_pushButton_Route_Record_clicked()
         //auto generate route file name
         //Save route record: Start => Goal (A=>B)
         QString route_filename = ui->lineEdit_Directory->text()+ui->lineEdit_MapName_RouteMaker->text()
-                                + "/waypoints/"
+                                + "/base_route/"
                                 + "base_" + ui->lineEdit_StartID->text() + "_" + ui->lineEdit_GoalID->text() + ".txt";
 
         QFile route_file(route_filename);
@@ -651,7 +650,7 @@ void MainWindow::on_pushButton_Route_Record_clicked()
         //auto generate route file name
         //Save reversed route record: Goal => Start (B=>A)
         QString file_name_reverse = ui->lineEdit_Directory->text() + ui->lineEdit_MapName_RouteMaker->text()
-                                    + "/waypoints/"
+                                    + "/base_route/"
                                     + "base_" + ui->lineEdit_GoalID->text() + "_" + ui->lineEdit_StartID->text() + ".txt";
         QFile file_reverse(file_name_reverse);
         if(!file_reverse.open(QIODevice::WriteOnly | QIODevice::Text))
@@ -792,7 +791,13 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
                     + " o_z:=" + pose_para[5]
                     + " o_w:=" + pose_para[6]);
         }
-
+        //startup voice control module
+#if 1
+        if(launchNaviVoiceCtrlEnvProcess->state() == QProcess::NotRunning)
+        {
+            start_process(launchNaviVoiceCtrlEnvProcess, "bash -c \"source ~/myenv3.9/bin/activate && roslaunch amr_ros om_navi_voice_control.launch\"");
+        }
+#endif
         ui->pushButton_Navi_StartUp->setText("Stop Navigation");
         ui->pushButton_Map_Startup->setDisabled(true);
         ui->pushButton_Route_Startup->setDisabled(true);
@@ -802,6 +807,9 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
     }
     else
     {
+#if 1
+        terminate_process(launchNaviVoiceCtrlEnvProcess);
+#endif
         terminate_process(launchNaviProcess);
 
         ui->pushButton_Map_Startup->setDisabled(false);
