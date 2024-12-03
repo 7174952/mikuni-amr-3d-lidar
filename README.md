@@ -1,12 +1,21 @@
 2024/12/3 音声制御、会話機能追加
+
 １．python3.9の模擬環境必要(osはpython3.8を使う：/homeフォルダにmyenv3.9のフォルダに保存
+
 前提条件：python3.9はすでにインストール済み状態
+
 ※音声制御のpythonシナリオはpython3.9を使う
+
 $ sudo apt update
+
 $ sudo apt install -y python3.9 python3.9-venv python3.9-dev
+
 //create env
+
 $ python3.9 -m venv myenv3.9
+
 //active python env, 模擬環境に入る
+
 $ source myenv/bin/activate
 
 2024/11/27 画像認識、先導機能追加
