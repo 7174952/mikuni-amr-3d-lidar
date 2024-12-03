@@ -6,7 +6,7 @@
 <node pkg="om_cart" name="om_cart" type="om_cart"/>
 
 <!--map load-->
-<arg name="static_map" default="rd_test1"/>
+<arg name="static_map" default="rd_ryu1"/>
 <!--init pose-->
 <arg name="p_x" default="0"/>
 <arg name="p_y" default="0"/>
@@ -45,16 +45,13 @@
     <param name="OBST_HIGHT_MAX_Z" value="1.5"/>
     <param name="obstacle_lim" value="10"/>
 
-    <param name="guide_enable" value="true"/>
+    <param name="guide_enable" value="false"/>
     <param name="idealDistance" value="2.0"/>
     <param name="stopDistance" value="4.0"/>
     <param name="kp" value="1.0"/>
-</node>
 
-<!--
-<node name="usb_cam_node" pkg="usb_cam" type="usb_cam_node" args="_video_device:=/dev/video2">
+    <param name="voice_ctrl_enable" value="false"/>
 </node>
--->
 
 <node pkg="tf" type="static_transform_publisher" name="base_link_to_livox_frame" args="0.23 0 0 0 0 0 base_link livox_frame 10"/>
 
