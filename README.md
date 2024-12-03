@@ -16,7 +16,7 @@ $ python3.9 -m venv myenv3.9
 
 //active python env, 模擬環境に入る
 
-$ source myenv/bin/activate
+$ source myenv3.9/bin/activate
 
 2024/11/27 画像認識、先導機能追加
 1. RealSenseカメラに向けの認識認識と距離測定機能追加した。pythonでのros node作成した
