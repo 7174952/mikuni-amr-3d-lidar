@@ -19,6 +19,8 @@
 #include <QtMultimedia/QMediaPlayer>
 #include <QtMultimedia/QMediaPlaylist>
 #include <QThread>
+#include <QSettings>
+#include <QStandardPaths>
 
 #include <sys/stat.h>
 
@@ -29,7 +31,6 @@
 #include <std_msgs/Int32.h>
 #include <std_msgs/Float32.h>
 #include <std_msgs/String.h>
-//
 
 //QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -55,8 +56,6 @@ public:
 
     void Music_Ctrl_CallBack(const std_msgs::String::ConstPtr&);
     void Start_Close_Mapping();
-    bool Save_Map();
-    void Copy_3D_Data();
 
     QString execute_shell_cmd(QString);
 
@@ -78,23 +77,7 @@ public:
 
     int person_state = 0;
 
-    bool is_joy_used = false;
-    bool is_route_maker_running = false;
-    bool is_nav_sys_running = false;
-    bool save_route_en = false;
-    bool is_saving_route = false;
-    bool is_navi_route_running = false;
-
     QString navi_route_name;
-
-    enum Map_State
-    {
-        MAKE_MAP_START = 0,
-        MAKE_MAP_SAVE,  //1
-        MAKE_MAP_READY, //2
-        MAKE_MAP_FINISH //3
-    };
-    Map_State map_make_state = MAKE_MAP_START;
 
     struct Robot_Pose
     {
@@ -111,6 +94,7 @@ public:
         QString waypoint_name;
         Robot_Pose pose;
     };
+    Waypoint_Data init_waypoint;
 
     struct Navi_Waypoint_info
     {
@@ -120,35 +104,32 @@ public:
     };
     QList<Navi_Waypoint_info> navi_route_list;
 
+    struct StartStop_Flag
+    {
+        bool is_joy_used;
+        bool is_making_map;
+        bool is_making_route;
+        bool is_recording_route;
+        bool is_navi_Startup;
+        bool is_navi_running;
+    };
+    StartStop_Flag startStop_flag;
 
     Robot_Pose robot_cur_pose;
     Robot_Pose robot_start_pose;
-    Robot_Pose robot_goal_pose;
 
     QList<QPushButton*> obj_buttons_list;
     QList<QString> route_list_record;
     QVector<double> last_point;
     double route_distance;
 
-    QVBoxLayout *groupBoxLayout_navi;
-
-
-    QList<QPushButton *> btn_list;
-    QButtonGroup *buttonGroup_navi;
-
-
 private slots:
-    void on_pushButton_Manual_Controll_clicked();
+    void on_pushButton_Manual_Control_clicked();
     void on_pushButton_Map_Startup_clicked();
     void on_pushButton_Route_Startup_clicked();
-    void on_pushButton_Route_SetWaypoint_clicked();
     void on_pushButton_Route_Record_clicked();
 
-    void on_lineEdit_MapName_textChanged(const QString &arg1);
-
     void on_pushButton_Navi_StartUp_clicked();
-
-    void on_pushButton_Spin_Run_clicked();
 
     void on_pushButton_Waypoint_Add_clicked();
 
@@ -158,9 +139,23 @@ private slots:
 
     void on_pushButton_Navi_Load_Script_clicked();
 
+    void on_pushButton_Select_Folder_clicked();
+
+    void on_pushButton_Navi_Script_Clear_clicked();
+
+    void on_comboBox_Sub_MapFolder_currentTextChanged(const QString &arg1);
+
+private:
+    void writeSettings();
+    void readSettings();
+    void initStartupLocation();
+    void initWaypoints();
+    bool getStartupCordinate();
+
 private:
     Ui::MainWindow *ui;
-    void Startup_Joy(bool);
     QMediaPlayer *player;
+    QString user_map_path;
+    QString last_location;
 };
 #endif // MAINWINDOW_H
