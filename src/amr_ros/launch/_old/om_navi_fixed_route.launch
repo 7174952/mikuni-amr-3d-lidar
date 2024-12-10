@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<launch>
+
+<include file="$(find om_modbus_master)/launch/om_modbusRTU.launch"/>
+
+<node pkg="om_cart" name="om_cart" type="om_cart">
+
+</node>
+
+<!--map load-->
+<arg name="static_map" default="ikeda/ikeda_map.yaml"/>
+<!--map server-->
+<node pkg="map_server" type="map_server" name="map_server" args="$(find amr_ros)/maps/$(arg static_map)">
+</node>
+
+
+<include file="$(find hdl_localization)/launch/hdl_localization_livox.launch" />
+
+<param name="waypoint_path" value="$(find amr_ros)/maps/ikeda/ikeda_waypoints.txt"/>
+<node name="load_waypoints" pkg="amr_ros" type="load_waypoints.py" output="screen"/>
+
+<!--trajectry -->
+<include file="$(find pure_pursuit)/launch/pure_pursuit_node.launch" />
+
+<!--detection obstacle on route -->
+<node name="detect_obstacle_point" pkg="amr_ros" type="detect_obstacle_point" output="screen">
+    <param name="OBST_HIGHT_MIN_Z" value="0.0"/>
+    <param name="OBST_HIGHT_MAX_Z" value="1.5"/>
+    <param name="obstacle_lim" value="10" />
+</node>
+
+<node name="usb_cam_node" pkg="usb_cam" type="usb_cam_node" args="_video_device:=/dev/video2">
+
+</node>
+
+<node pkg="tf" type="static_transform_publisher" name="base_link_to_livox_frame" args="0.23 0 0 0 0 0 base_link livox_frame 10"/>
+
+<node pkg="tf" type="static_transform_publisher" name="base_link_to_sonar_center" args="0 0.1 0.5 0 0 0 base_link sonar_frame_center 10"/>
+<node pkg="tf" type="static_transform_publisher" name="base_link_to_sonar_left" args="0 0.3 0 0 0 0 base_link sonar_frame_left 10"/>
+<node pkg="tf" type="static_transform_publisher" name="base_link_to_sonar_right" args="0 -0.3 0 0 0 0 base_link sonar_frame_right 10"/>
+
+
+<!--Start 3DLidar -->
+<include file="$(find livox_ros_driver2)/launch_ROS1/rviz_MID360.launch" />
+
+
+<arg name="gui" default="true" />
+<param name="use_gui" value="$(arg gui)"/>
+<arg name="rvizconfig" value="$(find amr_ros)/rviz/path.rviz"/>
+<node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
+
+
+</launch>

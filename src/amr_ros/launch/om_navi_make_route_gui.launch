@@ -25,10 +25,6 @@
 </include>
 
 <node pkg="tf" type="static_transform_publisher" name="base_link_to_livox_frame" args="0.23 0 0 0 0 0 base_link livox_frame 10"/>
-<!--
-<node name="usb_cam_node" pkg="usb_cam" type="usb_cam_node" args="_video_device:=/dev/video2">
-</node>
--->
 
 <!--Start 3DLidar -->
 <include file="$(find livox_ros_driver2)/launch_ROS1/rviz_MID360.launch" />

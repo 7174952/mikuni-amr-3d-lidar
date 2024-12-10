@@ -27,14 +27,11 @@
  <arg name="init_ow" value="$(arg o_w)"/>
 </include>
 
-<!--
-<param name="waypoint_path" value="$(find amr_ros)/maps/ikeda/ikeda_waypoints.txt"/>
-<node name="load_waypoints" pkg="amr_ros" type="load_waypoints.py" output="screen"/>
--->
-
 <!-- Realsense camera ROSノードの起動 -->
+<!--
 <node name="realsense_yolo_node" pkg="amr_ros" type="realsense_yolo_demo.py" output="screen">
 </node>
+-->
 
 <!--trajectry -->
 <include file="$(find pure_pursuit)/launch/pure_pursuit_node.launch" />
