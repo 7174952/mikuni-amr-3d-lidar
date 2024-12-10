@@ -1,3 +1,19 @@
+2024/12/10 GUI更新、停止角度制御修正
+
+１．アプリとしてデスクトップで起動できた
+
+$cd ~/catkin_ws/src/amr_ros/scripts/
+
+$sudo cp GuideRobot.desktop /usr/share/applications/
+
+2. ルート制御手順変更、gui操作変更
+   
+以前：手動走行１回目 - key waypointsを取得、手動走行2回目-期待ルート作成
+
+変更後：手動走行１回目のみ - key waypointsと期待ルートを同時に取得する
+
+３．自律走行停止時に向き制御できない不具合修正した
+
 2024/12/3 音声制御、会話機能追加
 
 １．python3.9の模擬環境必要(osはpython3.8を使う：/homeフォルダにmyenv3.9のフォルダに保存
