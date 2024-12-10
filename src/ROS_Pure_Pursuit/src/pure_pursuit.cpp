@@ -11,15 +11,14 @@
 #include <ros/ros.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/transform_broadcaster.h>
+#include <tf2/utils.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/Path.h>
 #include <nav_msgs/Odometry.h>
-#include <std_msgs/Float32MultiArray.h>
 #include <ackermann_msgs/AckermannDriveStamped.h>
 #include "visualization_msgs/Marker.h"
 #include <kdl/frames.hpp>
-#include <pure_pursuit/AutoReset2Move.h>
 #include <std_srvs/Empty.h>
 #include <std_msgs/Bool.h>
 
@@ -41,40 +40,23 @@ class PurePursuit
     {
       return sqrt(pow(pt1.x - pt2.x,2) + pow(pt1.y - pt2.y,2) + pow(pt1.z - pt2.z,2));
     }
-    // Find turn back (180deg) waypoints in path
-    int find_turn_back_waypoints();
-    bool check_turnback_waypoints(uint idx);
-    // Set Max number to repeate
-    bool reset_path_callback(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
-
-
     // Ros_spin.
     void run();
-
+    //set direction
+    void goal_orientation_control(const geometry_msgs::Pose& goal_pose, bool *orient_reached);
+    bool reset_path_callback(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
+    
   private:
     // Parameters
     double wheel_base_;
     double lookahead_distance_, position_tolerance_;
+    double orientation_tolerance_;
     double v_max_, v_, w_max_;
     double delta_, delta_vel_, acc_, jerk_, delta_max_;
     int idx_memory;
     unsigned idx_;
     bool goal_reached_, path_loaded_;
-    std::vector<uint> waypoints_back;
-    bool is_turnback_waypoint;
-    bool is_arrived_turnback_waypoint;
-    enum
-    {
-        TURN_ROUND_DEFAULT = 0,
-        TURN_ROUND_FIRST_STOP = 1,
-        TURN_ROUND_RUN = 2,
-        TURN_ROUND_LAST_STOP = 3,
-        TURN_ROUND_LINE_UP = 4,
-    };
-    uint state_turn;
-    double last_time;
-    double last_line_vel;
-    double last_angle_vel;
+    nav_msgs::Odometry odom_;
 
     nav_msgs::Path path_;
     geometry_msgs::Twist cmd_vel_;
@@ -85,9 +67,6 @@ class PurePursuit
     ros::NodeHandle nh_, nh_private_;
     ros::Subscriber sub_odom_, sub_path_;
     ros::Publisher pub_vel_, pub_acker_, pub_marker_;
-    ros::Publisher pub_goal_dist_;
-    ros::Publisher pub_goal_reached;
-    std_msgs::Float32MultiArray msg_goal_dist;
     tf2_ros::Buffer tf_buffer_;
     tf2_ros::TransformListener tf_listener_;
     tf2_ros::TransformBroadcaster tf_broadcaster_;
@@ -96,11 +75,13 @@ class PurePursuit
 
     ros::ServiceServer reset_path_srv;
     bool reset_path_en;
+    ros::Publisher pub_goal_reached;
+    bool orient_reached;
 
 
 };
 
-PurePursuit::PurePursuit() : lookahead_distance_(1.0), v_max_(0.2), w_max_(1.0), position_tolerance_(0.1), idx_(0),
+PurePursuit::PurePursuit() : lookahead_distance_(1.0), v_max_(0.2), w_max_(1.0), position_tolerance_(0.1), orientation_tolerance_(0.1),idx_(0),
                              goal_reached_(false), nh_private_("~"), tf_listener_(tf_buffer_),
                              map_frame_id_("map"), robot_frame_id_("base_link"), lookahead_frame_id_("lookahead")
 {
@@ -110,6 +91,7 @@ PurePursuit::PurePursuit() : lookahead_distance_(1.0), v_max_(0.2), w_max_(1.0),
   nh_private_.getParam("max_linear_velocity", v_max_);
   nh_private_.getParam("max_rotational_velocity", w_max_);
   nh_private_.getParam("position_tolerance", position_tolerance_);
+  nh_private_.getParam("orientation_tolerance",orientation_tolerance_);
   nh_private_.getParam("steering_angle_velocity", delta_vel_);
   nh_private_.getParam("acceleration", acc_);
   nh_private_.getParam("jerk", jerk_);
@@ -130,13 +112,6 @@ PurePursuit::PurePursuit() : lookahead_distance_(1.0), v_max_(0.2), w_max_(1.0),
   v_ = v_max_;
   idx_memory = 0;
   path_loaded_ = false;
-  waypoints_back.clear();
-  is_turnback_waypoint = false;
-  is_arrived_turnback_waypoint = false;
-  state_turn = TURN_ROUND_DEFAULT;
-  last_line_vel = 0;
-  last_angle_vel = 0;
-
   
   sub_path_ = nh_.subscribe("/waypoints", 1, &PurePursuit::waypoints_listener, this);
   sub_odom_ = nh_.subscribe("/odom", 1, &PurePursuit::cmd_generator, this);
@@ -145,18 +120,16 @@ PurePursuit::PurePursuit() : lookahead_distance_(1.0), v_max_(0.2), w_max_(1.0),
   pub_acker_ = nh_.advertise<ackermann_msgs::AckermannDriveStamped>("cmd_acker", 1);
   pub_marker_ = nh_.advertise<visualization_msgs::Marker>("lookahead", 1);
 
-  pub_goal_dist_ = nh_.advertise<std_msgs::Float32MultiArray>("goal_dist",1);
-  msg_goal_dist.data.resize(2); //data[0] - 0(invalid)/1(valid), data[1] - distance from ROBOT -> GOAL
-  msg_goal_dist.data[0] = 0;
-  msg_goal_dist.data[1] = 0.0;
-
   pub_goal_reached = nh_.advertise<std_msgs::Bool>("/reached_goal",1);
   reset_path_srv = nh_.advertiseService("reset_path", &PurePursuit::reset_path_callback, this);
   reset_path_en = false;
+  orient_reached = false;
 }
 
 void PurePursuit::cmd_generator(nav_msgs::Odometry odom)
 {
+    odom_ = odom;
+
   if (path_loaded_)
   {
     // Get the current pose
@@ -165,7 +138,7 @@ void PurePursuit::cmd_generator(nav_msgs::Odometry odom)
     {
       tf = tf_buffer_.lookupTransform(map_frame_id_, robot_frame_id_, ros::Time(0));
       // Detetmine the waypoint to track on the basis of 1) current_pose 2) waypoints_info 3) lookahead_distance
-      for (idx_=idx_memory; idx_ < path_.poses.size() && !is_turnback_waypoint; idx_++)
+      for (idx_=idx_memory; idx_ < path_.poses.size(); idx_++)
       {
         if (distance(path_.poses[idx_].pose.position, tf.transform.translation) > lookahead_distance_)
         {
@@ -176,40 +149,34 @@ void PurePursuit::cmd_generator(nav_msgs::Odometry odom)
           pose_offset.M.GetQuaternion(lookahead_.transform.rotation.x, lookahead_.transform.rotation.y,
                                       lookahead_.transform.rotation.z, lookahead_.transform.rotation.w);
           idx_memory = idx_;
-          is_turnback_waypoint = check_turnback_waypoints(idx_memory);
           break;
         }
       }
 
-      msg_goal_dist.data[0] = 0;
-      msg_goal_dist.data[1] = 0.0;
-      // If approach the goal (last waypoint or turnback waypoint)
-      if (!path_.poses.empty() && ((idx_ >= path_.poses.size()) || is_turnback_waypoint))
+      // If approach the goal (last waypoint)
+      if (!path_.poses.empty() && idx_ >= path_.poses.size())
       {
-        KDL::Frame goal_offset = is_turnback_waypoint ? trans2base(path_.poses[idx_].pose, tf.transform) : trans2base(path_.poses.back().pose, tf.transform);
-        msg_goal_dist.data[0] = 1;
-        msg_goal_dist.data[1] = fabs(goal_offset.p.x());
+        KDL::Frame goal_offset = trans2base(path_.poses.back().pose, tf.transform);
 
         // Reach the goal
-        if (fabs(goal_offset.p.x()) <= position_tolerance_)
+        if (   ((goal_reached_ == false) && (fabs(goal_offset.p.x()) <= position_tolerance_))
+            || ((goal_reached_ == true)  && (orient_reached == false)))
         {
-            if(idx_ >= path_.poses.size())
-            {
-                goal_reached_ = true;
-                path_ = nav_msgs::Path(); // Reset the path
-
-                ROS_INFO("pure_pursuit: Reached Goal!");
-                std_msgs::Bool is_reached_goal;
-                is_reached_goal.data = true;
-                pub_goal_reached.publish(is_reached_goal);
-
-            }
-            else
-            {
-                is_turnback_waypoint = false; //turnback waypoint arrived!
-                is_arrived_turnback_waypoint = true;
-                last_time = ros::Time::now().toSec();
-            }
+          goal_reached_ = true;
+          geometry_msgs::Pose goal_pose = path_.poses.back().pose;
+          goal_orientation_control(goal_pose, &orient_reached);
+          if(orient_reached)
+          {
+            //reached required direction
+            path_ = nav_msgs::Path(); // Reset the path
+            std_msgs::Bool is_reached_goal;
+            is_reached_goal.data = true;
+            pub_goal_reached.publish(is_reached_goal);
+          }
+          else
+          {
+              return;
+          }
         }
         // Not meet the position tolerance: extend the lookahead distance beyond the goal
         else
@@ -234,7 +201,6 @@ void PurePursuit::cmd_generator(nav_msgs::Odometry odom)
                                       lookahead_.transform.rotation.z, lookahead_.transform.rotation.w);
         }
       }
-      pub_goal_dist_.publish(msg_goal_dist);
 
       // Waypoint follower
       if (!goal_reached_)
@@ -250,84 +216,22 @@ void PurePursuit::cmd_generator(nav_msgs::Odometry odom)
         // Linear velocity
         cmd_vel_.linear.x = v_;
         cmd_acker_.drive.speed = v_;
-
-        if(is_arrived_turnback_waypoint)
-        {
-            switch(state_turn)
-            {
-            case TURN_ROUND_DEFAULT:
-
-            case TURN_ROUND_FIRST_STOP: //stop and ready to turn back
-                cmd_vel_.linear.x = 0.00;
-                cmd_acker_.drive.speed = 0.00;
-                cmd_vel_.angular.z = 0.00;
-                if(ros::Time::now().toSec() - last_time > 1.0)
-                {
-                    state_turn = TURN_ROUND_RUN;
-                }
-                break;
-            case TURN_ROUND_RUN://turn back 180deg
-            {
-                cmd_vel_.linear.x = 0.00;
-                cmd_acker_.drive.speed = 0.00;
-                cmd_vel_.angular.z = 0.3;
-                double d_theta = std::fabs(tf.transform.rotation.z - path_.poses[idx_].pose.orientation.z);
-                d_theta = (d_theta > 1.5) ? (d_theta - 2) : d_theta;
-                if((check_turnback_waypoints(idx_) == false) && (std::fabs(d_theta) < 0.02))
-                {
-                    state_turn = TURN_ROUND_LAST_STOP;
-                    last_time = ros::Time::now().toSec();
-                }
-            }
-                break;
-            case TURN_ROUND_LAST_STOP: //turn back complete and stop to run straight
-                cmd_vel_.linear.x = 0.00;
-                cmd_acker_.drive.speed = 0.00;
-                cmd_vel_.angular.z = 0.00;
-                if(ros::Time::now().toSec() - last_time > 0.5)
-                {
-                    state_turn = TURN_ROUND_LINE_UP;
-                    last_time = ros::Time::now().toSec();
-                    last_line_vel = 0.00;
-                    last_angle_vel = 0.00;
-                }
-
-                break;
-            case TURN_ROUND_LINE_UP: //raise up linear speed
-                last_line_vel += acc_;
-                last_angle_vel += delta_vel_;
-
-                cmd_vel_.linear.x = last_line_vel;
-                cmd_acker_.drive.speed = last_line_vel;
-                cmd_vel_.angular.z = std::min(last_angle_vel,cmd_vel_.angular.z);
-
-                if(last_line_vel > v_)
-                {
-                    cmd_vel_.linear.x = v_;
-                    cmd_acker_.drive.speed = v_;
-                    is_arrived_turnback_waypoint = false;
-                    state_turn = TURN_ROUND_DEFAULT;
-                }
-                break;
-            }
-        }
-
         cmd_acker_.header.stamp = ros::Time::now();
       }
       // Reach the goal: stop the vehicle
       else
       {
-        if(reset_path_en == true)
+        if(reset_path_en)
         {
             //restart
             idx_ = 0;
             idx_memory = 0;
             goal_reached_ = false;
             reset_path_en = false;
+            orient_reached = false;
             std_msgs::Bool is_reached_goal;
             is_reached_goal.data = false;
             pub_goal_reached.publish(is_reached_goal);
-
         }
         else //Reset and repeate to run again
         {
@@ -394,49 +298,36 @@ void PurePursuit::cmd_generator(nav_msgs::Odometry odom)
   }
 }
 
-
-int PurePursuit::find_turn_back_waypoints()
+void PurePursuit::goal_orientation_control(const geometry_msgs::Pose& goal_pose, bool *orient_reached)
 {
-    uint idx_;
-    double z_theta_curr;
-    double z_theta_next;
+    double goal_yaw = tf2::getYaw(goal_pose.orientation);
 
-    if(path_.poses.size() < 2)
+    // Get current orientation from odometry (replace angular.z)
+    double current_yaw = tf2::getYaw(odom_.pose.pose.orientation); // Use odometry for accurate yaw
+
+    double yaw_error = goal_yaw - current_yaw;
+
+    // Ensure yaw_error is within [-pi, pi]
+    while (yaw_error > M_PI)
+        yaw_error -= 2 * M_PI;
+    while (yaw_error < -M_PI)
+        yaw_error += 2 * M_PI;
+
+    *orient_reached = false;
+    if (std::abs(yaw_error) > orientation_tolerance_)
     {
-        return -1; //waypoint number not enough
+        cmd_vel_.linear.x = 0.0; // Stop linear motion
+        cmd_vel_.angular.z = yaw_error * 1.0; // Proportional control for orientation
+        cmd_vel_.angular.z = std::min(w_max_, std::abs(cmd_vel_.angular.z));
     }
-
-    waypoints_back.clear();
-
-    for (idx_=0; idx_ < path_.poses.size() - 1; idx_++)
+    else
     {
-        z_theta_curr = path_.poses[idx_].pose.orientation.z;
-        z_theta_next = path_.poses[idx_ + 1].pose.orientation.z;
-        //--------------------------------------------
-        //theta1*theta2 < 0 && theta1^2+theta2^2 = 1
-        //then waypoint1 => waypoint2: turn 180deg
-        //---------------------------------------------
-        if(   (z_theta_curr * z_theta_next < 0)
-           && (std::fabs((z_theta_curr*z_theta_curr + z_theta_next*z_theta_next) - 1.0) < 0.1))
-        {
-            waypoints_back.push_back(idx_);
-        }
+        ROS_INFO("Goal reached with correct orientation.");
+        cmd_vel_.linear.x = 0.0;
+        cmd_vel_.angular.z = 0.0;
+        *orient_reached = true;
     }
-
-    return waypoints_back.size();
-}
-
-bool PurePursuit::check_turnback_waypoints(uint idx)
-{
-    for(uint i = 0; i < waypoints_back.size(); i++)
-    {
-        if(waypoints_back[i] == idx)
-        {
-            return true;
-        }
-    }
-
-    return false;
+    pub_vel_.publish(cmd_vel_);
 }
 
 bool PurePursuit::reset_path_callback(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
@@ -460,7 +351,6 @@ void PurePursuit::waypoints_listener(nav_msgs::Path new_path)
     {
       std::cout << "Received Waypoints" << std::endl;
       path_loaded_ = true;
-      find_turn_back_waypoints();
     }
     else
     {

@@ -13,32 +13,17 @@ find_package(catkin REQUIRED COMPONENTS
   tf2
   tf2_ros
   rospy
-  message_generation
-
 )
 
 find_package(orocos_kdl REQUIRED)
-
-################################################
-## Declare ROS messages, services and actions ##
-################################################
-
-add_service_files(
-  FILES
-  AutoReset2Move.srv
-)
-generate_messages(
-  DEPENDENCIES std_msgs geometry_msgs
-)
 
 ###################################
 ## catkin specific configuration ##
 ###################################
 
 catkin_package(
-  CATKIN_DEPENDS roscpp std_msgs geometry_msgs nav_msgs ackermann_msgs tf2 tf2_ros rospy message_generation
+  CATKIN_DEPENDS roscpp std_msgs geometry_msgs nav_msgs ackermann_msgs tf2 tf2_ros rospy
   )
-
 
 
 ###########
