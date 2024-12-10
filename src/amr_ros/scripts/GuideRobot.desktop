@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Name=Guide Robot
+Comment=Startup Mikuni guide robot application
+Exec=bash -c "source /opt/ros/noetic/setup.bash && source ~/catkin_ws/devel/setup.bash && roslaunch gui_guide GUI.launch"
+Icon=/home/mikuni/catkin_ws/src/robot.png
+Terminal=false
+Type=Application
+Categories=Utility;Application;
+
