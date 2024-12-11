@@ -62,6 +62,7 @@ MainWindow::MainWindow(QWidget *parent)
     launchMakeRouteProcess = new QProcess(this);
     launchNaviLoadRouteProcess = new QProcess(this);
     launchNaviVoiceCtrlEnvProcess = new QProcess(this);
+    launchNaviCameraProcess = new QProcess(this);
 
     ros_process.push_back(launchManualCtrlProcess);
     ros_process.push_back(launchLiosamProcess);
@@ -70,6 +71,7 @@ MainWindow::MainWindow(QWidget *parent)
     ros_process.push_back(launchNaviProcess);
     ros_process.push_back(launchNaviLoadRouteProcess);
     ros_process.push_back(launchNaviVoiceCtrlEnvProcess);
+    ros_process.push_back(launchNaviCameraProcess);
 
     ui->pushButton_Manual_Control->setEnabled(true);
     ui->pushButton_Map_Startup->setEnabled(true);
@@ -421,7 +423,7 @@ void MainWindow::on_pushButton_Map_Startup_clicked()
         QString saveMap_cmd = "rosrun map_server map_saver -f  " + user_map_path + "/" + ui->comboBox_Sub_MapFolder->currentText();
         if(execute_shell_cmd(saveMap_cmd) == "error")
         {
-            QMessageBox::warning(this,"Warning","Map data not exist on topic: /map");
+            QMessageBox::warning(this,"Warning","Map data not exist!");
         }
 
         ui->label_MapMaker->setText("[Info] Shutdown mapping Nodes.");
@@ -431,17 +433,13 @@ void MainWindow::on_pushButton_Map_Startup_clicked()
 
         //save 3D pcd map
         ui->label_MapMaker->setText("[Info] Save 3d map.");
-        ros::Time curr_time = ros::Time::now();
-        ros::Time last_time = curr_time;
+        ros::Time last_time = ros::Time::now();
         bool is_pcd_exist = false;
-
-        while((curr_time.toSec() - last_time.toSec()) < 5.0)
+        while((ros::Time::now().toSec() - last_time.toSec()) < 5.0)
         {
-            last_time = curr_time;
             if(QFile::exists(RootPath + map_3d))
             {
                 execute_shell_cmd("mv " + RootPath + map_3d + " " + user_map_path + "/");
-                ui->pushButton_Map_Startup->setText("Start to Make Map");
                 is_pcd_exist = true;
                 break;
             }
@@ -453,9 +451,12 @@ void MainWindow::on_pushButton_Map_Startup_clicked()
             QMessageBox::warning(this,"Warning","pcd file not exist!.");
 
         }
-
         ui->label_MapMaker->setText("[Info] Making Map Finished!");
         startStop_flag.is_making_map = false;
+
+        execute_shell_cmd("rosnode kill /map_saver");
+        execute_shell_cmd("pkill livox_ros_drive");
+        ui->pushButton_Map_Startup->setText("Start to Make Map");
 
         ui->pushButton_Manual_Control->setEnabled(true);
         ui->pushButton_Route_Startup->setEnabled(true);
@@ -751,7 +752,7 @@ void MainWindow::on_pushButton_Route_Record_clicked()
         }
         route_file.close();
 
-        //Save reversed route record: To => From (B=>A)
+        //Save reversed route record: To => From (B=>A), orient * 180deg
         QString file_name_reverse = user_map_path
                                     + "/base_route/"
                                     + "base_" + ui->comboBox_Route_To->currentText() + "_" + ui->comboBox_Route_From->currentText() + ".txt";
@@ -764,7 +765,24 @@ void MainWindow::on_pushButton_Route_Record_clicked()
         QTextStream record_out(&file_reverse);
         while(!route_list_record.isEmpty())
         {
-            record_out << route_list_record.takeLast() << "\n";
+            QStringList val_list = route_list_record.takeLast().split(",");
+
+            tf::Quaternion quat_A(val_list.at(3).toDouble(), //orig_x
+                                         val_list.at(4).toDouble(), //orig_y
+                                         val_list.at(5).toDouble(), //orig_z
+                                         val_list.at(6).toDouble()  //orig_w
+                                        );
+            tf::Quaternion quat_delt;
+            quat_delt.setRPY(0, 0, M_PI);
+            tf::Quaternion quat_B = quat_A * quat_delt;
+
+            record_out << val_list.at(0) << ","
+                       << val_list.at(1) << ","
+                       << val_list.at(2) << ","
+                       << QString::number(quat_B.getX())  << ","
+                       << QString::number(quat_B.getY())  << ","
+                       << QString::number(quat_B.getZ())  << ","
+                       << QString::number(quat_B.getW())  << "\n";
         }
         file_reverse.close();
 
@@ -798,20 +816,35 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
         //startup navigation nodes with initial position and orientation
         if(launchNaviProcess->state() == QProcess::NotRunning)
         {
+            QString guide_en = "false";
+            if(ui->checkBox_With_Camera->isChecked() && ui->checkBox_Guide_Enable->isChecked())
+            {
+                guide_en = "true";
+            }
             start_process(launchNaviProcess, "roslaunch amr_ros om_navi_fixed_route_gui.launch static_map:="
                     + ui->comboBox_Sub_MapFolder->currentText()
+                    + " camera_guide_en:=" + guide_en
                     + " p_x:=" + QString::number(init_waypoint.pose.pos_x)
                     + " p_y:=" + QString::number(init_waypoint.pose.pos_y)
                     + " o_z:=" + QString::number(init_waypoint.pose.pos_z)
                     + " o_w:=" + QString::number(init_waypoint.pose.ori_w));
         }
-        //startup voice control module
-#if 0
-        if(launchNaviVoiceCtrlEnvProcess->state() == QProcess::NotRunning)
+        //startup camera module
+        if(ui->checkBox_With_Camera->isChecked())
         {
-            start_process(launchNaviVoiceCtrlEnvProcess, "bash -c \"source ~/myenv3.9/bin/activate && roslaunch amr_ros om_navi_voice_control.launch\"");
+            if(launchNaviCameraProcess->state() == QProcess::NotRunning)
+            {
+                start_process(launchNaviCameraProcess, "roslaunch amr_ros om_navi_depth_camera.launch");
+            }
         }
-#endif
+        //startup voice control module
+        if(ui->checkBox_With_Mic->isChecked())
+        {
+            if(launchNaviVoiceCtrlEnvProcess->state() == QProcess::NotRunning)
+            {
+                start_process(launchNaviVoiceCtrlEnvProcess, "bash -c \"source ~/myenv3.9/bin/activate && roslaunch amr_ros om_navi_voice_control.launch\"");
+            }
+        }
         ui->pushButton_Navi_StartUp->setText("Finish Navigation");
 
         startStop_flag.is_navi_Startup = true;
@@ -827,9 +860,16 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
     }
     else
     {
-#if 0
-        terminate_process(launchNaviVoiceCtrlEnvProcess);
-#endif
+        //terminate camera process
+        if(ui->checkBox_With_Camera->isChecked())
+        {
+            terminate_process(launchNaviCameraProcess);
+        }
+        //terminate voice/mic process
+        if(ui->checkBox_With_Mic->isChecked())
+        {
+            terminate_process(launchNaviVoiceCtrlEnvProcess);
+        }
         terminate_process(launchNaviProcess);
 
         ui->pushButton_Navi_StartUp->setText("Startup Navigation");

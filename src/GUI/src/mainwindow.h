@@ -31,6 +31,8 @@
 #include <std_msgs/Int32.h>
 #include <std_msgs/Float32.h>
 #include <std_msgs/String.h>
+#include <tf/transform_broadcaster.h>
+#include <tf/transform_datatypes.h>
 
 //QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -55,7 +57,6 @@ public:
     void Odometry_CallBack(const nav_msgs::Odometry&);
 
     void Music_Ctrl_CallBack(const std_msgs::String::ConstPtr&);
-    void Start_Close_Mapping();
 
     QString execute_shell_cmd(QString);
 
@@ -67,6 +68,7 @@ public:
     QProcess* launchNaviProcess;
     QProcess* launchNaviLoadRouteProcess;
     QProcess* launchNaviVoiceCtrlEnvProcess;
+    QProcess* launchNaviCameraProcess;
 
     // QVector<QProcess *> proc_amr;
     QString map_3d;
@@ -74,7 +76,6 @@ public:
     QString RootPath;
 
     int process_num =16;
-
     int person_state = 0;
 
     QString navi_route_name;
