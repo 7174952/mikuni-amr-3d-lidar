@@ -236,13 +236,13 @@ def main():
         if(find_wakeup_word(text.strip()) == False):
             continue
         if(lang == "zh"):
-            text_to_speech("你好！")
+            text_to_speech("你好,我是小度！")
             if(lang_cur == "ja"):
                 nlp = spacy.load("zh_core_web_md")
                 lang_cur = "zh"
 
         elif lang == "ja":
-            text_to_speech("こんにちは")
+            text_to_speech("こんにちは，ミクロボです")
             if(lang_cur == "zh"):
                 nlp = spacy.load("ja_core_news_md")
                 lang_cur = "ja"
