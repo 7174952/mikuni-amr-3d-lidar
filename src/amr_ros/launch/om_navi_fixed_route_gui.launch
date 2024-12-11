@@ -7,6 +7,7 @@
 
 <!--map load-->
 <arg name="static_map" default="rd_ryu1"/>
+<arg name="camera_guide_en" default="false"/>
 <!--init pose-->
 <arg name="p_x" default="0"/>
 <arg name="p_y" default="0"/>
@@ -27,12 +28,6 @@
  <arg name="init_ow" value="$(arg o_w)"/>
 </include>
 
-<!-- Realsense camera ROSノードの起動 -->
-<!--
-<node name="realsense_yolo_node" pkg="amr_ros" type="realsense_yolo_demo.py" output="screen">
-</node>
--->
-
 <!--trajectry -->
 <include file="$(find pure_pursuit)/launch/pure_pursuit_node.launch" />
 
@@ -42,7 +37,7 @@
     <param name="OBST_HIGHT_MAX_Z" value="1.5"/>
     <param name="obstacle_lim" value="10"/>
 
-    <param name="guide_enable" value="false"/>
+    <param name="guide_enable" value="$(arg camera_guide_en)"/>
     <param name="idealDistance" value="2.0"/>
     <param name="stopDistance" value="4.0"/>
     <param name="kp" value="1.0"/>

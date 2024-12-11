@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<launch>
+
+<!-- Realsense camera ROSノードの起動 -->
+<node name="realsense_yolo_node" pkg="amr_ros" type="realsense_yolo_demo.py" output="screen">
+</node>
+
+</launch>
