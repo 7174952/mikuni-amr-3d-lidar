@@ -5,7 +5,7 @@ import spacy
 import rospy
 from std_msgs.msg import String
 from zhconv import convert
-from openai import OpenAI
+import openai
 import time
 import os
 import speech_recognition as sr
@@ -21,7 +21,7 @@ else:
     rospy.loginfo("Using CPU")
 
 # 初始化Whisper模型
-model = whisper.load_model("small", device=device)
+model = whisper.load_model("base", device=device)
 
 # 初始化spaCy
 # nlp = spacy.load("zh_core_web_md")
@@ -29,15 +29,12 @@ nlp = spacy.load("ja_core_news_md")
 lang_cur = "ja"
 
 # ROS话题名称
-music_cmd_pub_topic = "/music_cmd"
 robot_cmd_pub_topic = "/robot_ctrl_cmd"
 # 初始化ROS发布者
-music_cmd_publisher = rospy.Publisher(music_cmd_pub_topic, String, queue_size=10)
 robot_cmd_publisher = rospy.Publisher(robot_cmd_pub_topic, String, queue_size=10)
 
 
 # 从环境变量中读取OpenAI API密钥
-openai = OpenAI()
 openai.api_key = os.getenv('OPENAI_API_KEY')
 
 # 初始化麦克风识别器
@@ -47,7 +44,7 @@ def recognize_speech(time_out = -1):
     """
     使用Whisper模型进行语音识别
     """
-    recognizer.energy_threshold = 10000
+    recognizer.energy_threshold = 4000
     print("请说话...")
     with sr.Microphone() as source:
         while True:
@@ -112,11 +109,8 @@ def execute_command(command, lang = 'ja'):
     执行控制指令，并使用TTS报告结果
     """
     #play music
-    start_robot = ["开始","前进","出发","進ん","進め","出発","しゅっぱつ","すすん","すすめ","スタット"]
+    start_robot = ["开始","前进","出发","走っ","はしっ","進ん","進め","出発","しゅっぱつ","すすん","すすめ","スタット"]
     stop_robot = ["停车","停止","停","ストップ","止まっ","とまっ","止まれ","とまれ"]
-    start_music = ["播放","打开","かけ","掛け"]
-    stop_music = ["关闭","停止","暂停","消し","けし","止め","とめ"]
-    oper_object = ["音乐","音楽","ミュージック"]
 
     resp_cmd = ""
     if(lang == 'ja'):
@@ -130,20 +124,8 @@ def execute_command(command, lang = 'ja'):
             #publish
             resp_cmd = "stop"
             robot_cmd_publisher.publish(resp_cmd)
-        elif command['action'] in start_music:
-            if command['object'] in oper_object:
-                #start music
-                response = "音楽を掛けます"
-                resp_cmd = "play"
-                music_cmd_publisher.publish(resp_cmd)
-        elif command['action'] in stop_music:
-            if command['object'] in oper_object:
-                #stop music
-                response = "音楽を止めます"
-                resp_cmd = "stop"
-                music_cmd_publisher.publish(resp_cmd)
         else:
-            response = "コマンドを分かりません"
+            response = "コマンドは分かりません"
 
     if(lang == 'zh'):
         if command['action'] in  start_robot:
@@ -151,23 +133,11 @@ def execute_command(command, lang = 'ja'):
             #publish
             resp_cmd = "start"
             robot_cmd_publisher.publish(resp_cmd)
-        elif ((command['action'] in stop_robot) and (command['object'] not in oper_object)) or (command['object'] in stop_robot):
+        elif (command['action'] in stop_robot) or (command['object'] in stop_robot):
             response = "停车了"
             #publish
             resp_cmd = "stop"
             robot_cmd_publisher.publish(resp_cmd)
-        elif command['action'] in start_music:
-            if command['object'] in oper_object:
-                #start music
-                response = "开始播放音乐了"
-                resp_cmd = "play"
-                music_cmd_publisher.publish(resp_cmd)
-        elif command['action'] in stop_music:
-            if command['object'] in oper_object:
-                #stop music
-                response = "停止播放音乐了"
-                resp_cmd = "stop"
-                music_cmd_publisher.publish(resp_cmd)
         else:
             response = "指令没有被识别。"
 
@@ -210,7 +180,7 @@ def text_to_speech(text):
 def find_wakeup_word(text):
     wakeup_dict: Dict[str, List[str]] = {
         "zh": ["小度小度", "小杜小杜","小肚小肚","小渡小渡"],
-        "ja": ["ミクロさん", "みくろさん", "ミクロサン","ミクロサウン"],
+        "ja": ["みくろぼ","ミクロボ","ミクロさん", "みくろさん", "ミクロサン","ミクロサウン"],
     }
 
     if (text.strip() in wakeup_dict["ja"]) or (text.strip() in wakeup_dict["zh"]):
