@@ -1,6 +1,6 @@
 2024/12/12 音声認識、音声制御、GUIコンフィグ
 -------------------------------------------------------------------------------------------------
-1.　~/.profile ファイルは~/.bashrcフィアルと下記の項目を同じように設定
+1.　~/.profile ファイルは~/.bashrcフィアルと下記の項目を同じように設定。設定後、パソコンを再起動すること
 
 export PATH="/usr/local/cuda-12.4/bin:$PATH"
 
@@ -8,7 +8,9 @@ export LD_LIBRARY_PATH="/usr/local/cuda-12.4/lib64:$LD_LIBRARY_PATH"
 
 export OPENAI_API_KEY=""
 
-2.音楽についてのコマンドを削除した
+2.　voice_chat_demo.pyファイルのwrite権限必要
+
+$sudo chmod 777 ~/catkin_ws/src/amr_ros/scripts/voice_chat_demo.py
 
 2024/12/11地図生成、ルート生成、音声認識、gui
 --------------------------------------------------------------------------------------------------
