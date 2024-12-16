@@ -8,6 +8,7 @@
 <!--map load-->
 <arg name="static_map" default="rd_ryu1"/>
 <arg name="camera_guide_en" default="false"/>
+<arg name="voice_control_en" default="false"/>
 <!--init pose-->
 <arg name="p_x" default="0"/>
 <arg name="p_y" default="0"/>
@@ -42,7 +43,7 @@
     <param name="stopDistance" value="4.0"/>
     <param name="kp" value="1.0"/>
 
-    <param name="voice_ctrl_enable" value="false"/>
+    <param name="voice_ctrl_enable" value="$(arg voice_control_en)"/>
 </node>
 
 <node pkg="tf" type="static_transform_publisher" name="base_link_to_livox_frame" args="0.23 0 0 0 0 0 base_link livox_frame 10"/>
