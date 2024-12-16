@@ -13,8 +13,9 @@ MainWindow::MainWindow(QWidget *parent)
     readSettings();
 
     sub_odom_        = nh_.subscribe("/odom", 1, &MainWindow::Odometry_CallBack, this);
-    pub_goal_        = nh_.advertise<std_msgs::Float32>("goal_cmd",10);
-    sub_music_ctrl   = nh_.subscribe("/music_cmd",1, &MainWindow::Music_Ctrl_CallBack, this);
+    pub_voice_mode   = nh_.advertise<std_msgs::String>("/voice_set_mode",10);
+    sub_navi_status  = nh_.subscribe("/navi_status",1, &MainWindow::navi_status_callback, this);
+    client_request_next_target = nh_.serviceClient<std_srvs::Empty>("req_next_target");
 
     //Set 3D data file name
     RootPath = QDir::homePath();
@@ -50,8 +51,10 @@ MainWindow::MainWindow(QWidget *parent)
 
     user_map_path = ui->lineEdit_Folder_Path->text() + "/" + ui->comboBox_Sub_MapFolder->currentText();
 
-    startStop_flag = {false,false,false,false,false,false};
+    startStop_flag = {false,false,false,false,false,false,false};
     init_waypoint = {"", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+
+    navi_route_status = {"","stop","","true"};
 
 
     //registered ros process
@@ -83,6 +86,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->pushButton_Navi_Save_Script->setEnabled(false);
     ui->pushButton_Navi_Script_Clear->setEnabled(false);
     ui->pushButton_Navi_Run->setEnabled(false);
+    ui->pushButton_Next_Target->setEnabled(false);
 
     //Regist navi object
     robot_cur_pose = {0,0,0,0,0,0,1};
@@ -93,14 +97,18 @@ MainWindow::MainWindow(QWidget *parent)
     last_point.fill(0.0);
 
     //Play music
-    player = new QMediaPlayer(this);
+    player_bgm = new QMediaPlayer(this);
     // 创建 QMediaPlaylist 播放列表对象
     QMediaPlaylist *playlist = new QMediaPlaylist(this);
-    playlist->addMedia(QUrl::fromLocalFile(RootPath + "/catkin_ws/src/amr_ros/resource/running_back_music.mp3"));
+
+    playlist->addMedia(QUrl::fromLocalFile(RootPath + "/catkin_ws/src/amr_ros/resource/robot_navi_bgm.mp3"));
     // 设置播放模式为循环播放
     playlist->setPlaybackMode(QMediaPlaylist::Loop);
     // 将播放列表设置为播放器的播放源
-    player->setPlaylist(playlist);
+    player_bgm->setPlaylist(playlist);
+
+    greet_player = new QMediaPlayer(this);
+
 }
 
 MainWindow::~MainWindow()
@@ -224,26 +232,75 @@ void MainWindow::initStartupLocation()
 
 }
 
-void MainWindow::Music_Ctrl_CallBack(const std_msgs::String::ConstPtr& msg)
+void MainWindow::navi_status_callback(const std_msgs::String::ConstPtr& msg)
 {
-    qDebug() << "gui music command:" << QString::fromStdString(msg->data) << "\n";
+    QStringList status_list = QString::fromStdString(msg->data).split(";");
+    navi_route_status.sub_route = status_list.at(0);        // A-B-C
+    navi_route_status.robot_state = status_list.at(1);      // start/stop/running
+    navi_route_status.current_location = status_list.at(2); // A/B/C/A-B-C
+    navi_route_status.route_finished = status_list.at(3);   // "false", "true"
 
-    if(msg->data == "play")
+    std_msgs::String voice_mode;
+    if(navi_route_status.robot_state == "start")
     {
-        player->play();
+        if(ui->checkBox_With_Mic->isChecked() && ui->checkBox_Voice_Control_En->isChecked())
+        {
+            voice_mode.data = "control";
+        }
+        else
+        {
+            voice_mode.data = "off";
+            player_bgm->play();
+        }
+        pub_voice_mode.publish(voice_mode);
+        ui->pushButton_Next_Target->setEnabled(false);
+        startStop_flag.is_essay_playing = false;
     }
-    else if(msg->data == "stop")
+    else if(navi_route_status.robot_state == "stop")
+    {      
+        player_bgm->stop();
+        voice_mode.data = "chat";
+        pub_voice_mode.publish(voice_mode);
+        if((ui->checkBox_Route_Auto_Next->isChecked() == false) && (navi_route_status.route_finished == "false"))
+        {
+            ui->pushButton_Next_Target->setEnabled(true);
+        }
+
+        if(startStop_flag.is_essay_playing == false && location_essay.contains(navi_route_status.current_location))
+        {
+            startStop_flag.is_essay_playing = true;
+            //essay for target location arrived
+            //greet for finished
+            QMediaPlaylist *playlist = new QMediaPlaylist(this);
+            playlist->addMedia(QUrl::fromLocalFile(location_essay.value(navi_route_status.current_location)));
+            // 设置播放模式为循环播放
+            playlist->setPlaybackMode(QMediaPlaylist::CurrentItemOnce);
+            // 将播放列表设置为播放器的播放源
+            greet_player->setPlaylist(playlist);
+            greet_player->play();
+        }
+
+
+        //Auto completed all process
+        if(navi_route_status.route_finished == "true")
+        {
+            terminate_process(launchNaviLoadRouteProcess);
+            startStop_flag.is_navi_running = false;
+            ui->pushButton_Navi_Run->setText("RUN");
+
+            ui->pushButton_Waypoint_Add->setEnabled(true);
+            ui->pushButton_Navi_Load_Script->setEnabled(true);
+            ui->pushButton_Navi_Save_Script->setEnabled(true);
+            ui->pushButton_Navi_Script_Clear->setEnabled(true);
+            ui->checkBox_Route_Auto_Next->setEnabled(true);
+
+        }
+    }
+    else //state=="running"
     {
-        player->stop();
+        //Do nothing
     }
-    else if(msg->data == "pause")
-    {
-        player->pause();
-    }
-    else
-    {
-        //do nothing
-    }
+
 }
 
 void MainWindow::Odometry_CallBack(const nav_msgs::Odometry& odom)
@@ -821,9 +878,17 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
             {
                 guide_en = "true";
             }
+
+            QString voice_control_en = "false";
+            if(ui->checkBox_With_Mic->isChecked() && ui->checkBox_Voice_Control_En->isChecked())
+            {
+                voice_control_en = "true";
+            }
+
             start_process(launchNaviProcess, "roslaunch amr_ros om_navi_fixed_route_gui.launch static_map:="
                     + ui->comboBox_Sub_MapFolder->currentText()
                     + " camera_guide_en:=" + guide_en
+                    + " voice_control_en:=" + voice_control_en
                     + " p_x:=" + QString::number(init_waypoint.pose.pos_x)
                     + " p_y:=" + QString::number(init_waypoint.pose.pos_y)
                     + " o_z:=" + QString::number(init_waypoint.pose.pos_z)
@@ -857,9 +922,48 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
         ui->pushButton_Navi_Script_Clear->setEnabled(true);
         ui->pushButton_Waypoint_Add->setEnabled(true);
         ui->pushButton_Navi_Run->setEnabled(true);
+
+        //load essay_voice_setup.txt
+        location_essay.clear();
+        QString fileName = user_map_path + "/essay_voice_setup.txt";
+        QFile file(fileName);
+        if(file.open(QIODevice::ReadOnly | QIODevice::Text))
+        {
+            QTextStream data_essay_in(&file);
+            while(!data_essay_in.atEnd())
+            {
+                QStringList line_in = data_essay_in.readLine().trimmed().split(":");
+                location_essay[line_in.at(0)] = line_in.at(1);
+            }
+            file.close();
+        }
+        else
+        {
+            QMessageBox::warning(this,"Warning","Open essay_voice_setup.txt failed! But continue to run!");
+        }
+
+        //greet for startup
+        QMediaPlaylist *playlist = new QMediaPlaylist(this);
+        playlist->addMedia(QUrl::fromLocalFile(RootPath + "/catkin_ws/src/amr_ros/resource/greet_startup_navi_ja.mp3"));
+        // 设置播放模式为循环播放
+        playlist->setPlaybackMode(QMediaPlaylist::CurrentItemOnce);
+        // 将播放列表设置为播放器的播放源
+        greet_player->setPlaylist(playlist);
+        greet_player->play();
+
     }
     else
     {
+        //greet for finished
+        QMediaPlaylist *playlist = new QMediaPlaylist(this);
+        playlist->addMedia(QUrl::fromLocalFile(RootPath + "/catkin_ws/src/amr_ros/resource/greet_finish_navi_ja.mp3"));
+        // 设置播放模式为循环播放
+        playlist->setPlaybackMode(QMediaPlaylist::CurrentItemOnce);
+        // 将播放列表设置为播放器的播放源
+        greet_player->setPlaylist(playlist);
+        greet_player->play();
+
+
         //terminate camera process
         if(ui->checkBox_With_Camera->isChecked())
         {
@@ -939,6 +1043,7 @@ void MainWindow::on_pushButton_Navi_Run_clicked()
         ui->pushButton_Navi_Load_Script->setEnabled(false);
         ui->pushButton_Navi_Save_Script->setEnabled(false);
         ui->pushButton_Navi_Script_Clear->setEnabled(false);
+        ui->checkBox_Route_Auto_Next->setEnabled(false);
 
     }
     else
@@ -951,6 +1056,7 @@ void MainWindow::on_pushButton_Navi_Run_clicked()
         ui->pushButton_Navi_Load_Script->setEnabled(true);
         ui->pushButton_Navi_Save_Script->setEnabled(true);
         ui->pushButton_Navi_Script_Clear->setEnabled(true);
+        ui->checkBox_Route_Auto_Next->setEnabled(true);
 
     }
 
@@ -975,17 +1081,6 @@ void MainWindow::on_pushButton_Navi_Save_Script_clicked()
         return;
     }
 
-    //Reverse waypoint and append to route list
-    if(ui->checkBox_Go_Back->isChecked())
-    {
-        QList<Navi_Waypoint_info> navi_route_list_tmp(navi_route_list);
-        navi_route_list_tmp.pop_back();
-        while(navi_route_list_tmp.empty())
-        {
-            navi_route_list.push_back(navi_route_list_tmp.takeLast());
-        }
-    }
-
     QString script_default_name = user_map_path + "/navi_route/" + "navi_script_"
                         + navi_route_list.first().waypoint_name + "_" + navi_route_list.last().waypoint_name + ".txt";
     QString fileName = QFileDialog::getSaveFileName(this,"Save file", script_default_name, "Text(*.txt);;All(*.*)");
@@ -1003,13 +1098,13 @@ void MainWindow::on_pushButton_Navi_Save_Script_clicked()
     }
     QTextStream navi_data_out(&file_navi_script);
     //save selected waypoint to file
-    if(ui->checkBox_Route_Cycle->isChecked())
+    if(ui->checkBox_Route_Auto_Next->isChecked())
     {
-        navi_data_out << "cycle:true\n";
+        navi_data_out << "AutoNextTarget:true\n";
     }
     else
     {
-        navi_data_out << "cycle:false\n";
+        navi_data_out << "AutoNextTarget:false\n";
     }
     for(uint i = 0; i < navi_route_list.size(); i++)
     {
@@ -1046,14 +1141,14 @@ void MainWindow::on_pushButton_Navi_Load_Script_clicked()
     QTextStream line_in(&file_script);
     if(!line_in.atEnd())
     {
-        QString is_cycle = line_in.readLine().split(":").at(1);
-        if(is_cycle.toLower().contains("true"))
+        QString is_auto_next_target = line_in.readLine().split(":").at(1);
+        if(is_auto_next_target.toLower().contains("true"))
         {
-            ui->checkBox_Route_Cycle->setChecked(true);
+            ui->checkBox_Route_Auto_Next->setChecked(true);
         }
         else
         {
-            ui->checkBox_Route_Cycle->setChecked(false);
+            ui->checkBox_Route_Auto_Next->setChecked(false);
         }
     }
     while(!line_in.atEnd())
@@ -1118,6 +1213,121 @@ void MainWindow::on_comboBox_Sub_MapFolder_currentTextChanged(const QString &arg
 {
     initWaypoints();
     user_map_path = ui->lineEdit_Folder_Path->text() + "/" + ui->comboBox_Sub_MapFolder->currentText();
+
+}
+
+void MainWindow::on_pushButton_Next_Target_clicked()
+{
+    // request:pure_pursuit to reset path
+    std_srvs::Empty srv;
+    if(client_request_next_target.call(srv))
+    {
+        ROS_INFO("load_waypoint: Reset path succeeded.");
+        qDebug() << "Request to next target is successful.";
+    }
+    else
+    {
+        QMessageBox::warning(this,"Warning","Request to next target is failed!");
+    }
+
+}
+
+void MainWindow::on_pushButton_Upload_Location_clicked()
+{
+    location_essay.clear();
+    //load locations (waypoints)
+    QString fileName = user_map_path + "/waypoints_info.txt";
+    QFile file(fileName);
+    if(!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        QMessageBox::warning(this,"Warning","Open file: " + fileName + "failed!");
+        return;
+    }
+    QTextStream data_in(&file);
+    while(!data_in.atEnd())
+    {
+        QString line = data_in.readLine().trimmed().split(":").at(0);
+        ui->comboBox_Location_Essay->addItem(line);
+        location_essay.insert(line, "");
+    }
+    file.close();
+
+    //load essay_voice_setup.txt
+    fileName = user_map_path + "/essay_voice_setup.txt";
+    file.setFileName(fileName);
+    if(!file.exists())
+        return;
+    if(!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return;
+    QTextStream data_essay_in(&file);
+    while(!data_essay_in.atEnd())
+    {
+        QStringList line_in = data_essay_in.readLine().trimmed().split(":");
+        if(location_essay.contains(line_in.at(0)))
+        {
+            location_essay[line_in.at(0)] = line_in.at(1);
+            ui->comboBox_Location_Essay->setItemData(ui->comboBox_Location_Essay->findText(line_in.at(0)) ,QBrush(Qt::green),Qt::ForegroundRole);
+        }
+    }
+    file.close();
+
+}
+
+
+void MainWindow::on_pushButton_Select_Essay_clicked()
+{
+    QString default_path = RootPath + "/catkin_ws/src/amr_ros/resource/";
+    QString fileName = QFileDialog::getOpenFileName(this, "Open File", default_path, "Text(*.mp3);;All (*.*)");
+    if(fileName.isEmpty()) //cancel
+    {
+        return;
+    }
+    ui->lineEdit_Essay_Path->setText(fileName);
+    if(ui->comboBox_Location_Essay->currentText().isEmpty())
+    {
+        QMessageBox::warning(this,"Warning","Please Select location first!");
+        return;
+    }
+    location_essay[ui->comboBox_Location_Essay->currentText()] = fileName;
+    ui->comboBox_Location_Essay->setItemData(ui->comboBox_Location_Essay->currentIndex() ,QBrush(Qt::green),Qt::ForegroundRole);
+
+
+}
+
+
+void MainWindow::on_comboBox_Location_Essay_currentTextChanged(const QString &arg1)
+{
+    ui->lineEdit_Essay_Path->clear();
+    ui->lineEdit_Essay_Path->setText(location_essay[ui->comboBox_Location_Essay->currentText()]);
+}
+
+
+void MainWindow::on_pushButton_Save_Location_Essay_clicked()
+{
+    QMessageBox::StandardButton reply = QMessageBox::question(
+                this,
+                "Make Sure",
+                "Do you want to update essay to locations?",
+                QMessageBox::Yes | QMessageBox::No);
+    if(reply == QMessageBox::No)
+    {
+        return;
+    }
+
+    QString fileName = user_map_path + "/essay_voice_setup.txt";
+    QFile file(fileName);
+    if(!file.open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        QMessageBox::warning(this,"Warning","Update essay voice for locations failed!");
+        return;
+    }
+
+    QTextStream data_out(&file);
+    for(auto it = location_essay.cbegin(); it != location_essay.cend(); ++it)
+    {
+        data_out << it.key() << ":" << it.value() << "\n";
+    }
+    file.close();
 
 }
 

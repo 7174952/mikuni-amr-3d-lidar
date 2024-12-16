@@ -21,6 +21,7 @@
 #include <QThread>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QMap>
 
 #include <sys/stat.h>
 
@@ -31,6 +32,7 @@
 #include <std_msgs/Int32.h>
 #include <std_msgs/Float32.h>
 #include <std_msgs/String.h>
+#include <std_srvs/Empty.h>
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_datatypes.h>
 
@@ -42,11 +44,13 @@ class MainWindow : public QWidget
 {
     Q_OBJECT
     ros::NodeHandle nh_;
-    ros::Publisher pub_goal_;
+    ros::Publisher pub_voice_mode;
     ros::Subscriber sub_odom_;
     ros::Subscriber sub_reach_goal_;
     ros::Subscriber sub_voice_order_;
-    ros::Subscriber sub_music_ctrl;
+    ros::Subscriber sub_navi_status;
+    ros::ServiceClient client_request_next_target;
+
 
 public:
     explicit MainWindow(QWidget *parent = nullptr);
@@ -56,7 +60,7 @@ public:
     void closeEvent(QCloseEvent*);
     void Odometry_CallBack(const nav_msgs::Odometry&);
 
-    void Music_Ctrl_CallBack(const std_msgs::String::ConstPtr&);
+    void navi_status_callback(const std_msgs::String::ConstPtr&);
 
     QString execute_shell_cmd(QString);
 
@@ -113,8 +117,18 @@ public:
         bool is_recording_route;
         bool is_navi_Startup;
         bool is_navi_running;
+        bool is_essay_playing;
     };
     StartStop_Flag startStop_flag;
+
+    struct Navi_Route_Status
+    {
+        QString sub_route;         //A-B, From A, To B,A->B
+        QString robot_state;       //stop, running
+        QString current_location;  //A or B, or AB
+        QString route_finished;    //true or false
+    };
+    Navi_Route_Status navi_route_status;
 
     Robot_Pose robot_cur_pose;
     Robot_Pose robot_start_pose;
@@ -146,6 +160,16 @@ private slots:
 
     void on_comboBox_Sub_MapFolder_currentTextChanged(const QString &arg1);
 
+    void on_pushButton_Next_Target_clicked();
+
+    void on_pushButton_Upload_Location_clicked();
+
+    void on_pushButton_Select_Essay_clicked();
+
+    void on_comboBox_Location_Essay_currentTextChanged(const QString &arg1);
+
+    void on_pushButton_Save_Location_Essay_clicked();
+
 private:
     void writeSettings();
     void readSettings();
@@ -155,8 +179,10 @@ private:
 
 private:
     Ui::MainWindow *ui;
-    QMediaPlayer *player;
+    QMediaPlayer *player_bgm;
+    QMediaPlayer *greet_player;
     QString user_map_path;
     QString last_location;
+    QMap<QString, QString> location_essay;
 };
 #endif // MAINWINDOW_H
