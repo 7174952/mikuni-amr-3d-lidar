@@ -7,7 +7,8 @@
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_datatypes.h>
 #include <std_msgs/Bool.h>
-//#include <tf/tf.h>
+#include <std_msgs/String.h>
+#include <std_srvs/Empty.h>
 
 #include <fstream>
 #include <sstream>
@@ -30,7 +31,24 @@ struct Navi_Waypoint_info
 };
 QList<Navi_Waypoint_info> navi_route_list;
 
-bool cycle_en = false;
+struct Navi_Route_Status
+{
+    QString sub_route;         //A-B, From A, To B,A->B
+    QString robot_state;       //start,stop, running
+    QString current_location;  //A or B, or AB
+    QString route_finished;    //true or false
+    void clear()
+    {
+        sub_route = "";
+        robot_state = "";
+        current_location = "";
+        route_finished = "";
+    }
+};
+Navi_Route_Status navi_route_status;
+
+bool auto_next_target = false;
+bool srv_req_next_target = false;
 bool is_arrived = false;
 enum Navi_State
 {
@@ -60,11 +78,11 @@ int loadRouteScript(const QString& script_name)
     {
         if(line_script_in.readLine().contains("true",Qt::CaseInsensitive))
         {
-            cycle_en = true;
+            auto_next_target = true;
         }
         else
         {
-            cycle_en = false;
+            auto_next_target = false;
         }
     }
 
@@ -174,6 +192,12 @@ void state_callback(const std_msgs::Bool::ConstPtr& msg)
     qDebug() << "callback is_arrived=" << is_arrived;
 }
 
+bool next_target_Request(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
+{
+    srv_req_next_target = true;
+    return true;
+}
+
 int main(int argc, char** argv)
 {
     ros::init(argc, argv, "waypoints_loader");
@@ -201,8 +225,12 @@ int main(int argc, char** argv)
 
     ros::Publisher waypoint_pub = nh.advertise<nav_msgs::Path>("/waypoints", 1);
     ros::ServiceClient reset_path_client = nh.serviceClient<std_srvs::Empty>("reset_path");
+    ros::ServiceServer req_next_target_srv = nh.advertiseService("/req_next_target",next_target_Request);
     std_srvs::Empty srv;
     ros::Subscriber reached_goal_pub = nh.subscribe("/reached_goal",10, state_callback);
+    ros::Publisher navi_status_pub = nh.advertise<std_msgs::String>("/navi_status",1);
+    std_msgs::String msg_navi_route_status;
+    navi_route_status = {"","stop",navi_route_list.front().waypoint_name,"false"};
 
     ros::Rate rate(1);
     QList<Navi_Waypoint_info> sub_route;
@@ -212,7 +240,7 @@ int main(int argc, char** argv)
 
     QThread::sleep(1);
 
-    navi_state = (navi_route_list.at(wp_index).wait_time > 0) ? NAVI_STATE_INIT_WAIT : NAVI_START_INIT_ROUTE;
+    navi_state = NAVI_STATE_INIT_WAIT;
 
     while (ros::ok())
     {
@@ -220,10 +248,17 @@ int main(int argc, char** argv)
         {
         case NAVI_STATE_INIT_WAIT:
             curr_time = ros::Time::now();
-            if((curr_time.toSec() - last_time.toSec()) > navi_route_list.at(wp_index).wait_time)
+            if(    ((auto_next_target == true) && ((curr_time.toSec() - last_time.toSec()) > navi_route_list.at(wp_index).wait_time + 1))
+                || ((auto_next_target == false) && (srv_req_next_target == true)))
             {
+                srv_req_next_target = false;
+
                 navi_state = NAVI_START_INIT_ROUTE;
             }
+            navi_route_status.robot_state = "stop";
+            navi_route_status.current_location = navi_route_list.front().waypoint_name;
+            navi_route_status.route_finished = "false";
+
             break;
         case NAVI_START_INIT_ROUTE:
             sub_route.clear();
@@ -243,7 +278,6 @@ int main(int argc, char** argv)
             waypoints_info = loadWaypoints(sub_route, sub_route_dir);
             //debug
             qDebug() << "waypoints_info size:" << waypoints_info.poses.size();
-
             waypoint_pub.publish(waypoints_info);
 
             // request:pure_pursuit to reset path
@@ -256,29 +290,60 @@ int main(int argc, char** argv)
                 ROS_WARN("load_waypoint: Reset path failed.");
             }
 
+            //set navigation status
+            navi_route_status.clear();
+            //for(const Navi_Waypoint_info info : sub_route)
+            for(uint i = 0; i < sub_route.size(); i++)
+            {
+                navi_route_status.sub_route.append(sub_route.at(i).waypoint_name);
+                if(i < sub_route.size() - 1)
+                {
+                    navi_route_status.sub_route.append("-");
+                }
+            }
+            navi_route_status.robot_state = "start";
+            navi_route_status.current_location = sub_route.front().waypoint_name;
+            navi_route_status.route_finished = "false";
+
             navi_state = NAVI_STATE_WAIT_ARRIVED_WAYPOINT;
             break;
         case NAVI_STATE_WAIT_ARRIVED_WAYPOINT:
             //get next sub route
             if(is_arrived)
             {
-                is_arrived = false;
+                //update navigation status
+                navi_route_status.robot_state = "stop";
+                navi_route_status.current_location = sub_route.back().waypoint_name;
+
                 //check final waypoint
                 if(navi_route_list.at(wp_index).wait_time < 0) //-1: final stopped
                 {
+                    navi_route_status.route_finished = "true";
                     navi_state = NAVI_STATE_ARRIVED_GOAL;
                 }
                 else
                 {
+                    navi_route_status.route_finished = "false";
                     //Stop and wait
                     last_time = ros::Time::now();
                     navi_state = NAVI_STATE_STOP_AND_WAIT;
                 }
+
+                is_arrived = false;
             }
+            else
+            {
+                //update navigation status
+                navi_route_status.robot_state = "running";
+                navi_route_status.current_location = navi_route_status.sub_route;
+                navi_route_status.route_finished = "false";
+            }
+
             break;
         case NAVI_STATE_STOP_AND_WAIT:
             curr_time = ros::Time::now();
-            if((curr_time.toSec() - last_time.toSec()) > navi_route_list.at(wp_index).wait_time)
+            if(    ((auto_next_target == true) && ((curr_time.toSec() - last_time.toSec()) > navi_route_list.at(wp_index).wait_time))
+                || ((auto_next_target == false) && (srv_req_next_target == true)))
             {
                 //prepare for next sub route data
                 sub_route.clear();
@@ -308,25 +373,35 @@ int main(int argc, char** argv)
                     ROS_WARN("load_waypoint: Reset path failed.");
                 }
 
+                //set navigation status
+                navi_route_status.clear();
+                for(uint i = 0; i < sub_route.size(); i++)
+                {
+                    navi_route_status.sub_route.append(sub_route.at(i).waypoint_name);
+                    if(i < sub_route.size() - 1)
+                    {
+                        navi_route_status.sub_route.append("-");
+                    }
+                }
+                navi_route_status.robot_state = "start";
+                navi_route_status.current_location = sub_route.front().waypoint_name;
+                navi_route_status.route_finished = "false";
+
+                srv_req_next_target = false;
                 navi_state = NAVI_STATE_WAIT_ARRIVED_WAYPOINT;
             }
             break;
         case NAVI_STATE_ARRIVED_GOAL:
         default:
-            if(cycle_en)
-            {
-                last_time = ros::Time::now();
-                wp_index = 0;
-
-                navi_state = NAVI_STATE_INIT_WAIT;
-            }
-            else
-            {
-                ROS_INFO("Reached Goal!\n Navigation is Over!");
-                ros::shutdown();
-            }
-            break;
+            ROS_INFO("Reached Goal!\n Navigation is Over!");
+            ros::shutdown();
         }
+
+        msg_navi_route_status.data =  navi_route_status.sub_route.toStdString() + ";"
+                                   +  navi_route_status.robot_state.toStdString() + ";"
+                                   +  navi_route_status.current_location.toStdString() + ";"
+                                   +  navi_route_status.route_finished.toStdString();
+        navi_status_pub.publish(msg_navi_route_status);
 
         ros::spinOnce();
         rate.sleep();

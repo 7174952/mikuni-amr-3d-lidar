@@ -269,7 +269,6 @@ void cmdrawCallback(const geometry_msgs::Twist::ConstPtr& msg)
 
     if(speed_ctrl.guide_enable)
     {
-        guide_speed_rate = 0;
         if(person_num > 0)
         {
             double dist_error = speed_ctrl.stopDistance - currentDistance;
@@ -287,6 +286,11 @@ void cmdrawCallback(const geometry_msgs::Twist::ConstPtr& msg)
 
             qDebug() << "currentDistance:" << currentDistance << "dist_error:" << dist_error << "rate:" << guide_speed_rate << "\n";
         }
+        else //person_num == 0, still running
+        {
+            guide_speed_rate = 1.0;
+        }
+
     }
 
     //update speed cmd by
@@ -298,8 +302,12 @@ void cmdrawCallback(const geometry_msgs::Twist::ConstPtr& msg)
     //update by people's distance behind cart
     if(speed_ctrl.guide_enable)
     {
-        cmd_vel.linear.x = guide_speed_rate * cmd_vel.linear.x;
-        cmd_vel.angular.z = guide_speed_rate * cmd_vel.angular.z;
+        //when stop or turn round, not control by behind person
+        if(std::abs(cmd_vel.linear.x) > 0)
+        {
+            cmd_vel.linear.x = guide_speed_rate * cmd_vel.linear.x;
+            cmd_vel.angular.z = guide_speed_rate * cmd_vel.angular.z;
+        }
     }
 
     //update by voice control comamnd
@@ -352,7 +360,7 @@ int main (int argc, char** argv)
     //detect person and distance
     ros::Subscriber sub_back_person_info = nh.subscribe("/person_detection_info",10, personInfoCallback);
     //wait voice control command
-    ros::Subscriber sub_voice_ctrl = nh.subscribe("/robot_ctrl_cmd",10, voiceCtrlCallback);
+    ros::Subscriber sub_voice_ctrl = nh.subscribe("/voice_ctrl_cmd",10, voiceCtrlCallback);
     voice_ctrl.start_cart = true;
 
     ros::spin ();
