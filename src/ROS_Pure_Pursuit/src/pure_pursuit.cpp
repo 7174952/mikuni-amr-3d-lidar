@@ -77,6 +77,7 @@ class PurePursuit
     bool reset_path_en;
     ros::Publisher pub_goal_reached;
     bool orient_reached;
+    bool init_orient_reached;
 
 
 };
@@ -124,6 +125,7 @@ PurePursuit::PurePursuit() : lookahead_distance_(1.0), v_max_(0.2), w_max_(1.0),
   reset_path_srv = nh_.advertiseService("reset_path", &PurePursuit::reset_path_callback, this);
   reset_path_en = false;
   orient_reached = false;
+  init_orient_reached = false;
 }
 
 void PurePursuit::cmd_generator(nav_msgs::Odometry odom)
@@ -136,22 +138,29 @@ void PurePursuit::cmd_generator(nav_msgs::Odometry odom)
     geometry_msgs::TransformStamped tf;
     try
     {
-      tf = tf_buffer_.lookupTransform(map_frame_id_, robot_frame_id_, ros::Time(0));
-      // Detetmine the waypoint to track on the basis of 1) current_pose 2) waypoints_info 3) lookahead_distance
-      for (idx_=idx_memory; idx_ < path_.poses.size(); idx_++)
-      {
-        if (distance(path_.poses[idx_].pose.position, tf.transform.translation) > lookahead_distance_)
+        if(init_orient_reached == false)
         {
-          KDL::Frame pose_offset = trans2base(path_.poses[idx_].pose, tf.transform);
-          lookahead_.transform.translation.x = pose_offset.p.x();
-          lookahead_.transform.translation.y = pose_offset.p.y();
-          lookahead_.transform.translation.z = pose_offset.p.z();
-          pose_offset.M.GetQuaternion(lookahead_.transform.rotation.x, lookahead_.transform.rotation.y,
-                                      lookahead_.transform.rotation.z, lookahead_.transform.rotation.w);
-          idx_memory = idx_;
-          break;
+            idx_ = 0;
         }
-      }
+        else
+        {
+          tf = tf_buffer_.lookupTransform(map_frame_id_, robot_frame_id_, ros::Time(0));
+          // Detetmine the waypoint to track on the basis of 1) current_pose 2) waypoints_info 3) lookahead_distance
+          for (idx_=idx_memory; idx_ < path_.poses.size(); idx_++)
+          {
+            if (distance(path_.poses[idx_].pose.position, tf.transform.translation) > lookahead_distance_)
+            {
+              KDL::Frame pose_offset = trans2base(path_.poses[idx_].pose, tf.transform);
+              lookahead_.transform.translation.x = pose_offset.p.x();
+              lookahead_.transform.translation.y = pose_offset.p.y();
+              lookahead_.transform.translation.z = pose_offset.p.z();
+              pose_offset.M.GetQuaternion(lookahead_.transform.rotation.x, lookahead_.transform.rotation.y,
+                                          lookahead_.transform.rotation.z, lookahead_.transform.rotation.w);
+              idx_memory = idx_;
+              break;
+            }
+          }
+        }
 
       // If approach the goal (last waypoint)
       if (!path_.poses.empty() && idx_ >= path_.poses.size())
@@ -205,18 +214,29 @@ void PurePursuit::cmd_generator(nav_msgs::Odometry odom)
       // Waypoint follower
       if (!goal_reached_)
       {
-        v_ = copysign(v_max_, v_);
-        
-        double lateral_offset = lookahead_.transform.translation.y;
-        cmd_vel_.angular.z = std::min(2*v_/lookahead_distance_*lookahead_distance_*lateral_offset, w_max_);
+        //Turn round before running
+        if((idx_ == 0) && (init_orient_reached == false))
+        {
+            geometry_msgs::Pose goal_pose = path_.poses.front().pose;
+            goal_orientation_control(goal_pose, &init_orient_reached);
 
-        // Desired Ackermann steering_angle
-        cmd_acker_.drive.steering_angle = std::min(atan2(2*lateral_offset*wheel_base_, lookahead_distance_*lookahead_distance_), delta_max_);
-        
-        // Linear velocity
-        cmd_vel_.linear.x = v_;
-        cmd_acker_.drive.speed = v_;
-        cmd_acker_.header.stamp = ros::Time::now();
+        }
+        else
+        {
+            v_ = copysign(v_max_, v_);
+
+            double lateral_offset = lookahead_.transform.translation.y;
+            cmd_vel_.angular.z = std::min(2*v_/lookahead_distance_*lookahead_distance_*lateral_offset, w_max_);
+
+            // Desired Ackermann steering_angle
+            cmd_acker_.drive.steering_angle = std::min(atan2(2*lateral_offset*wheel_base_, lookahead_distance_*lookahead_distance_), delta_max_);
+
+            // Linear velocity
+            cmd_vel_.linear.x = v_;
+            cmd_acker_.drive.speed = v_;
+            cmd_acker_.header.stamp = ros::Time::now();
+
+        }
       }
       // Reach the goal: stop the vehicle
       else
@@ -229,6 +249,7 @@ void PurePursuit::cmd_generator(nav_msgs::Odometry odom)
             goal_reached_ = false;
             reset_path_en = false;
             orient_reached = false;
+            init_orient_reached = false;
             std_msgs::Bool is_reached_goal;
             is_reached_goal.data = false;
             pub_goal_reached.publish(is_reached_goal);
