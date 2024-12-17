@@ -153,7 +153,7 @@ def execute_command(command, lang = 'ja'):
     #play music
     start_robot = ["开始","前进","出发","走っ","はしっ","進ん","進め","出発","しゅっぱつ","すすん","すすめ","スタット"]
     stop_robot = ["停车","停止","停","ストップ","止まっ","とまっ","止まれ","とまれ"]
-
+    is_cmd_recognize = False;
     resp_cmd = ""
     if(lang == 'ja'):
         if command['action'] in  start_robot:
@@ -161,14 +161,16 @@ def execute_command(command, lang = 'ja'):
             #publish
             resp_cmd = "start"
             robot_cmd_publisher.publish(resp_cmd)
+            is_cmd_recognize = True
         elif command['action'] in stop_robot:
             response = voice_resp_ja["resp_stop_and_wait"]
             #publish
             resp_cmd = "stop"
             robot_cmd_publisher.publish(resp_cmd)
-        else:
-            response = "コマンドは分かりません"
-            response = voice_resp_ja["resp_unknown_cmd"]
+            is_cmd_recognize = True
+        # else:
+        #     response = "コマンドは分かりません"
+        #     response = voice_resp_ja["resp_unknown_cmd"]
 
     if(lang == 'zh'):
         if command['action'] in  start_robot:
@@ -176,17 +178,22 @@ def execute_command(command, lang = 'ja'):
             #publish
             resp_cmd = "start"
             robot_cmd_publisher.publish(resp_cmd)
+            is_cmd_recognize = True
         elif (command['action'] in stop_robot) or (command['object'] in stop_robot):
             response = voice_resp_zh["resp_stop_and_wait"]
             #publish
             resp_cmd = "stop"
             robot_cmd_publisher.publish(resp_cmd)
-        else:
-            response = voice_resp_zh["resp_unknown_cmd"]
+            is_cmd_recognize = True
+        # else:
+            # response = voice_resp_zh["resp_unknown_cmd"]
 
     # 使用TTS播放执行结果
     try:
-        playsound(response)
+        if(is_cmd_recognize):
+            playsound(response)
+        else:
+            print(f"Command not recognized: {command['action']}")
     except Exception as e:
         rospy.logwarn(f"Error playing sound: {e}")
 

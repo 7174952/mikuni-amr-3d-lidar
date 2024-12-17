@@ -6,5 +6,6 @@ Exec=bash -c "source /opt/ros/noetic/setup.bash && source ~/catkin_ws/devel/setu
 Icon=/home/mikuni/catkin_ws/src/amr_ros/resource/robot.png
 Terminal=false
 Type=Application
+StartupWMClass=GuideRobot
 Categories=Utility;Application;
 
