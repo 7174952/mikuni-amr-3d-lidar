@@ -5,6 +5,7 @@
 #include <std_msgs/Float32MultiArray.h>
 #include <sensor_msgs/Range.h>
 #include <std_msgs/String.h>
+#include <std_msgs/Int32.h>
 
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
@@ -28,6 +29,7 @@ double OBST_HIGHT_MAX_Z = 1.0;  //default: 1.0
 
 ros::Publisher pub_close_points;
 ros::Publisher pub_cmd_vel;
+ros::Publisher pub_obst_points_num;
 
 double linear_velocity = 0;
 double turning_radius = 0;
@@ -241,6 +243,10 @@ void cloudCB(const sensor_msgs::PointCloud2ConstPtr& input)
     filtered_cloud->is_dense = true;
 
     obstacle_points_num = filtered_cloud->points.size();
+    //publish detected obstacle points total number
+    std_msgs::Int32 points_num;
+    points_num.data = obstacle_points_num;
+    pub_obst_points_num.publish(points_num);
 
     //Publish point cloud which is removed background
     sensor_msgs::PointCloud2 output;
@@ -352,6 +358,7 @@ int main (int argc, char** argv)
     pub_close_points = nh.advertise<sensor_msgs::PointCloud2>("/obstacle_points", 10);
 
     pub_cmd_vel = nh.advertise<geometry_msgs::Twist>("/cmd_vel", 10);
+    pub_obst_points_num = nh.advertise<std_msgs::Int32>("/obstacle_points_num",10);
 
 
     ros::Subscriber sub_points = nh.subscribe ("/livox/lidar", 10, cloudCB);
