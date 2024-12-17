@@ -10,7 +10,5 @@
     <node pkg="om_cart" name="om_cart" type="om_cart"/>
     
     <node pkg="om_cart" name="om_manual" type="om_manual"/>
- <!--   <node name="usb_cam_node" pkg="usb_cam" type="usb_cam_node" args="_video_device:=/dev/video2">
 
-    </node>-->
 </launch>

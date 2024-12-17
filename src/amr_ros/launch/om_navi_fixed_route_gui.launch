@@ -9,10 +9,14 @@
 <arg name="static_map" default="rd_ryu1"/>
 <arg name="camera_guide_en" default="false"/>
 <arg name="voice_control_en" default="false"/>
+<arg name="obstacle_lim_num" default="10"/>
 <!--init pose-->
-<arg name="p_x" default="0"/>
-<arg name="p_y" default="0"/>
-<arg name="o_z" default="0"/>
+<arg name="p_x" default="0.0"/>
+<arg name="p_y" default="0.0"/>
+<arg name="p_z" default="0.0"/>
+<arg name="o_x" default="0.0"/>
+<arg name="o_y" default="0.0"/>
+<arg name="o_z" default="0.0"/>
 <arg name="o_w" default="1.0"/>
 
 <!--cmd_vel topic-->
@@ -25,6 +29,9 @@
  <arg name="pcd_set" value="$(arg static_map)"/>
  <arg name="init_px" value="$(arg p_x)"/>
  <arg name="init_py" value="$(arg p_y)"/>
+ <arg name="init_pz" value="$(arg p_z)"/>
+ <arg name="init_ox" value="$(arg o_x)"/>
+ <arg name="init_oy" value="$(arg o_y)"/>
  <arg name="init_oz" value="$(arg o_z)"/>
  <arg name="init_ow" value="$(arg o_w)"/>
 </include>
@@ -36,7 +43,7 @@
 <node name="detect_obstacle_point" pkg="amr_ros" type="detect_obstacle_point" output="screen">
     <param name="OBST_HIGHT_MIN_Z" value="0.0"/>
     <param name="OBST_HIGHT_MAX_Z" value="1.5"/>
-    <param name="obstacle_lim" value="10"/>
+    <param name="obstacle_lim" value="$(arg obstacle_lim_num)"/>
 
     <param name="guide_enable" value="$(arg camera_guide_en)"/>
     <param name="idealDistance" value="2.0"/>
