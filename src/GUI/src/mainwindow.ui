@@ -44,7 +44,7 @@
       <x>20</x>
       <y>100</y>
       <width>541</width>
-      <height>171</height>
+      <height>211</height>
      </rect>
     </property>
     <property name="styleSheet">
@@ -77,7 +77,7 @@ background-color: rgb(170, 220, 255);</string>
       <item>
        <widget class="QLineEdit" name="lineEdit_Folder_Path">
         <property name="styleSheet">
-         <string notr="true">font:10pt &quot;Times New Roman&quot;;</string>
+         <string notr="true">font:11pt &quot;Times New Roman&quot;;</string>
         </property>
         <property name="text">
          <string/>
@@ -103,7 +103,7 @@ background-color: rgb(170, 220, 255);</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>80</y>
+       <y>90</y>
        <width>231</width>
        <height>32</height>
       </rect>
@@ -132,7 +132,7 @@ background-color: rgb(170, 220, 255);</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>120</y>
+       <y>140</y>
        <width>231</width>
        <height>32</height>
       </rect>
@@ -161,9 +161,9 @@ background-color: rgb(170, 220, 255);</string>
      <property name="geometry">
       <rect>
        <x>250</x>
-       <y>70</y>
+       <y>80</y>
        <width>131</width>
-       <height>91</height>
+       <height>101</height>
       </rect>
      </property>
      <property name="styleSheet">
@@ -206,9 +206,9 @@ background-color: rgb(170, 220, 255);</string>
      <property name="geometry">
       <rect>
        <x>390</x>
-       <y>70</y>
+       <y>80</y>
        <width>141</width>
-       <height>91</height>
+       <height>101</height>
       </rect>
      </property>
      <property name="styleSheet">
@@ -261,9 +261,9 @@ background-color: rgb(170, 220, 255);</string>
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>280</y>
+      <y>320</y>
       <width>541</width>
-      <height>131</height>
+      <height>121</height>
      </rect>
     </property>
     <property name="styleSheet">
@@ -278,7 +278,7 @@ background-color: rgb(220, 255, 219);
      <property name="geometry">
       <rect>
        <x>50</x>
-       <y>70</y>
+       <y>60</y>
        <width>391</width>
        <height>41</height>
       </rect>
@@ -615,8 +615,8 @@ background-color: rgb(255, 255, 219);</string>
     <widget class="QPushButton" name="pushButton_Next_Target">
      <property name="geometry">
       <rect>
-       <x>170</x>
-       <y>490</y>
+       <x>160</x>
+       <y>500</y>
        <width>171</width>
        <height>71</height>
       </rect>
@@ -651,9 +651,9 @@ background-color: rgb(255, 255, 219);</string>
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>420</y>
+      <y>450</y>
       <width>541</width>
-      <height>231</height>
+      <height>211</height>
      </rect>
     </property>
     <property name="styleSheet">
@@ -684,7 +684,7 @@ background-color: rgb(220, 255, 219);</string>
      <property name="geometry">
       <rect>
        <x>50</x>
-       <y>70</y>
+       <y>60</y>
        <width>391</width>
        <height>41</height>
       </rect>
@@ -701,7 +701,7 @@ background-color: rgb(220, 255, 219);</string>
      <property name="geometry">
       <rect>
        <x>50</x>
-       <y>130</y>
+       <y>120</y>
        <width>201</width>
        <height>32</height>
       </rect>
@@ -730,7 +730,7 @@ background-color: rgb(220, 255, 219);</string>
      <property name="geometry">
       <rect>
        <x>50</x>
-       <y>170</y>
+       <y>160</y>
        <width>201</width>
        <height>32</height>
       </rect>
@@ -758,14 +758,14 @@ background-color: rgb(220, 255, 219);</string>
     <widget class="QPushButton" name="pushButton_Route_Record">
      <property name="geometry">
       <rect>
-       <x>300</x>
-       <y>140</y>
-       <width>141</width>
+       <x>280</x>
+       <y>130</y>
+       <width>151</width>
        <height>51</height>
       </rect>
      </property>
      <property name="styleSheet">
-      <string notr="true">font: 12pt &quot;Times New Roman&quot;;
+      <string notr="true">font: 14pt &quot;Times New Roman&quot;;
 background-color: rgb(220, 255, 219);</string>
      </property>
      <property name="text">
@@ -777,9 +777,9 @@ background-color: rgb(220, 255, 219);</string>
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>660</y>
+      <y>670</y>
       <width>541</width>
-      <height>161</height>
+      <height>151</height>
      </rect>
     </property>
     <property name="styleSheet">
@@ -838,7 +838,7 @@ background-color: rgb(255, 228, 131);</string>
      <property name="geometry">
       <rect>
        <x>20</x>
-       <y>100</y>
+       <y>90</y>
        <width>131</width>
        <height>41</height>
       </rect>
@@ -854,7 +854,7 @@ background-color: rgb(255, 228, 131);</string>
      <property name="geometry">
       <rect>
        <x>220</x>
-       <y>100</y>
+       <y>90</y>
        <width>131</width>
        <height>41</height>
       </rect>

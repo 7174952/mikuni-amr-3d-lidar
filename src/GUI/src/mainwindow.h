@@ -49,6 +49,7 @@ class MainWindow : public QWidget
     ros::Subscriber sub_reach_goal_;
     ros::Subscriber sub_voice_order_;
     ros::Subscriber sub_navi_status;
+    ros::Subscriber sub_obstacle_detect;
     ros::ServiceClient client_request_next_target;
 
 
@@ -59,6 +60,7 @@ public:
     void start_process(QProcess*, QString);
     void closeEvent(QCloseEvent*);
     void Odometry_CallBack(const nav_msgs::Odometry&);
+    void obstacle_CallBack(const std_msgs::Int32::ConstPtr&);
 
     void navi_status_callback(const std_msgs::String::ConstPtr&);
 
@@ -118,6 +120,7 @@ public:
         bool is_navi_Startup;
         bool is_navi_running;
         bool is_essay_playing;
+        bool is_obst_playing;
     };
     StartStop_Flag startStop_flag;
 
@@ -181,8 +184,10 @@ private:
     Ui::MainWindow *ui;
     QMediaPlayer *player_bgm;
     QMediaPlayer *greet_player;
+    QMediaPlayer *obst_player;
     QString user_map_path;
     QString last_location;
     QMap<QString, QString> location_essay;
+    const uint16_t OBSTACLE_LIM_NUM = 10;
 };
 #endif // MAINWINDOW_H
