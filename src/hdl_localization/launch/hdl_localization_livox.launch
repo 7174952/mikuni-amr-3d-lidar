@@ -6,6 +6,9 @@
   <arg name="points_topic" default="/livox/lidar" />
   <arg name="init_px" default="0.0"/>
   <arg name="init_py" default="0.0"/>
+  <arg name="init_pz" default="0.0"/>
+  <arg name="init_ox" default="0.0"/>
+  <arg name="init_oy" default="0.0"/>
   <arg name="init_oz" default="0.0"/>
   <arg name="init_ow" default="1.0"/>
   <!-- input clouds are transformed in odom_child_frame, and then localization is performed in that frame -->
@@ -62,11 +65,11 @@
       <param name="specify_init_pose" value="true" />
       <param name="init_pos_x" value="$(arg init_px)" />
       <param name="init_pos_y" value="$(arg init_py)" />
-      <param name="init_pos_z" value="0.0" />
-      <param name="init_ori_w" value="$(arg init_ow)" />
-      <param name="init_ori_x" value="0.0" />
-      <param name="init_ori_y" value="0.0" />
+      <param name="init_pos_z" value="$(arg init_pz)" />
+      <param name="init_ori_x" value="$(arg init_ox" />
+      <param name="init_ori_y" value="$(arg init_oy" />
       <param name="init_ori_z" value="$(arg init_oz)" />
+      <param name="init_ori_w" value="$(arg init_ow)" />
 
       <param name="use_global_localization" value="$(arg use_global_localization)" />
     </node>
