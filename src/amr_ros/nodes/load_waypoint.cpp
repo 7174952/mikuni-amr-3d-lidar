@@ -154,25 +154,10 @@ nav_msgs::Path loadWaypoints(const QList<Navi_Waypoint_info>& sub_route, QString
         quat_delt.setRPY(0,0,(sub_route.last().delt_angle / 180.0) *M_PI);
         tf::Quaternion quat_new = quat_original * quat_delt;
         //append last waypoint
-        geometry_msgs::PoseStamped pose_last;
-        pose_last.header.frame_id = "map";
-        pose_last.pose.position.x = waypoints_list.poses.back().pose.position.x;
-        pose_last.pose.position.y = waypoints_list.poses.back().pose.position.y;
-        pose_last.pose.position.z = waypoints_list.poses.back().pose.position.z;
-        pose_last.pose.orientation.x = quat_new.getX();
-        pose_last.pose.orientation.y = quat_new.getY();
-        pose_last.pose.orientation.z = quat_new.getZ();
-        pose_last.pose.orientation.w = quat_new.getW();
-        waypoints_list.poses.push_back(pose_last);
-
-        qDebug() << "z rotate:" << sub_route.last().delt_angle << "degree";
-        qDebug() << "Append waypoint: x=" << waypoints_list.poses.back().pose.position.x
-                 << "y=" << waypoints_list.poses.back().pose.position.y
-                 << "z=" << waypoints_list.poses.back().pose.position.z
-                 << "ori_x=" << waypoints_list.poses.back().pose.orientation.x
-                 << "ori_y=" << waypoints_list.poses.back().pose.orientation.y
-                 << "ori_z=" << waypoints_list.poses.back().pose.orientation.z
-                 << "ori_w=" << waypoints_list.poses.back().pose.orientation.w;
+        waypoints_list.poses.back().pose.orientation.x = quat_new.getX();
+        waypoints_list.poses.back().pose.orientation.y = quat_new.getY();
+        waypoints_list.poses.back().pose.orientation.z = quat_new.getZ();
+        waypoints_list.poses.back().pose.orientation.w = quat_new.getW();
     }
 
     ROS_INFO("Fetched %lu waypoints", waypoints_list.poses.size());
