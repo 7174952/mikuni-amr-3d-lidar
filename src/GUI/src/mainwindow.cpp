@@ -106,6 +106,7 @@ MainWindow::MainWindow(QWidget *parent)
     playlist->setPlaybackMode(QMediaPlaylist::Loop);
     // 将播放列表设置为播放器的播放源
     player_bgm->setPlaylist(playlist);
+    player_bgm->setVolume(15);
 
     greet_player = new QMediaPlayer(this);
     obst_player = new QMediaPlayer(this);
@@ -251,7 +252,6 @@ void MainWindow::obstacle_CallBack(const std_msgs::Int32::ConstPtr& msg)
             {
                 player_bgm->stop();
             }
-
             //greet for finished
             QMediaPlaylist *playlist = new QMediaPlaylist(this);
             playlist->addMedia(QUrl::fromLocalFile(RootPath + "/catkin_ws/src/amr_ros/resource/obstacle_alert_ja.mp3"));
@@ -309,27 +309,36 @@ void MainWindow::navi_status_callback(const std_msgs::String::ConstPtr& msg)
         startStop_flag.is_essay_playing = false;
     }
     else if(navi_route_status.robot_state == "stop")
-    {      
+    {
         player_bgm->stop();
-        voice_mode.data = "chat";
-        pub_voice_mode.publish(voice_mode);
-        if((ui->checkBox_Route_Auto_Next->isChecked() == false) && (navi_route_status.route_finished == "false"))
-        {
-            ui->pushButton_Next_Target->setEnabled(true);
-        }
 
         if(startStop_flag.is_essay_playing == false && location_essay.contains(navi_route_status.current_location))
         {
             startStop_flag.is_essay_playing = true;
             //essay for target location arrived
             //greet for finished
-            QMediaPlaylist *playlist = new QMediaPlaylist(this);
-            playlist->addMedia(QUrl::fromLocalFile(location_essay.value(navi_route_status.current_location)));
-            // 设置播放模式为循环播放
-            playlist->setPlaybackMode(QMediaPlaylist::CurrentItemOnce);
-            // 将播放列表设置为播放器的播放源
-            greet_player->setPlaylist(playlist);
+            greet_player->setMedia(QUrl::fromLocalFile(location_essay.value(navi_route_status.current_location)));
             greet_player->play();
+            // 连接信号到槽函数
+            connect(greet_player, &QMediaPlayer::mediaStatusChanged, this, [=](QMediaPlayer::MediaStatus status)
+            {
+                if (status == QMediaPlayer::EndOfMedia)
+                {
+                    std_msgs::String voice_mode;
+                    voice_mode.data = "chat";
+                    pub_voice_mode.publish(voice_mode);
+                }
+            });
+        }
+        else
+        {
+            voice_mode.data = "chat";
+            pub_voice_mode.publish(voice_mode);
+        }
+
+        if((ui->checkBox_Route_Auto_Next->isChecked() == false) && (navi_route_status.route_finished == "false"))
+        {
+            ui->pushButton_Next_Target->setEnabled(true);
         }
 
         //Auto completed all process
@@ -1001,28 +1010,15 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
         }
 
         //greet for startup
-        QMediaPlaylist *playlist = new QMediaPlaylist(this);
-        playlist->addMedia(QUrl::fromLocalFile(RootPath + "/catkin_ws/src/amr_ros/resource/greet_startup_navi_ja.mp3"));
-        // 设置播放模式为循环播放
-        playlist->setPlaybackMode(QMediaPlaylist::CurrentItemOnce);
-        // 将播放列表设置为播放器的播放源
-        greet_player->setPlaylist(playlist);
+        greet_player->setMedia(QUrl::fromLocalFile(RootPath + "/catkin_ws/src/amr_ros/resource/greet_startup_navi_ja.mp3"));
         greet_player->play();
 
     }
     else
     {
-        if(ui->checkBox_With_Mic->isChecked() && ui->checkBox_Voice_Control_En->isChecked())
-        {
-            player_bgm->stop();
-        }
+        player_bgm->stop();
         //greet for finished
-        QMediaPlaylist *playlist = new QMediaPlaylist(this);
-        playlist->addMedia(QUrl::fromLocalFile(RootPath + "/catkin_ws/src/amr_ros/resource/greet_finish_navi_ja.mp3"));
-        // 设置播放模式为循环播放
-        playlist->setPlaybackMode(QMediaPlaylist::CurrentItemOnce);
-        // 将播放列表设置为播放器的播放源
-        greet_player->setPlaylist(playlist);
+        greet_player->setMedia(QUrl::fromLocalFile(RootPath + "/catkin_ws/src/amr_ros/resource/greet_finish_navi_ja.mp3"));
         greet_player->play();
 
 
@@ -1403,5 +1399,26 @@ void MainWindow::on_pushButton_Save_Location_Essay_clicked()
     }
     file.close();
 
+}
+
+
+void MainWindow::on_radioButton_Waypoint_Final_clicked()
+{
+    ui->spinBox_Waypoint_Wait->setValue(-1);
+    ui->spinBox_Waypoint_Wait->setEnabled(false);
+}
+
+
+void MainWindow::on_radioButton_Waypoint_First_clicked()
+{
+    ui->spinBox_Waypoint_Wait->setValue(0);
+    ui->spinBox_Waypoint_Wait->setEnabled(false);
+}
+
+
+void MainWindow::on_radioButton_Waypoint_Middle_clicked()
+{
+    ui->spinBox_Waypoint_Wait->setValue(0);
+    ui->spinBox_Waypoint_Wait->setEnabled(true);
 }
 

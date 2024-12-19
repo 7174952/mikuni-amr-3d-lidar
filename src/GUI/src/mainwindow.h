@@ -173,6 +173,12 @@ private slots:
 
     void on_pushButton_Save_Location_Essay_clicked();
 
+    void on_radioButton_Waypoint_Final_clicked();
+
+    void on_radioButton_Waypoint_First_clicked();
+
+    void on_radioButton_Waypoint_Middle_clicked();
+
 private:
     void writeSettings();
     void readSettings();
