@@ -151,9 +151,9 @@ void PurePursuit::cmd_generator(nav_msgs::Odometry odom)
             if (distance(path_.poses[idx_].pose.position, tf.transform.translation) > lookahead_distance_)
             {
               KDL::Frame pose_offset = trans2base(path_.poses[idx_].pose, tf.transform);
-              lookahead_.transform.translation.x = pose_offset.p.x();
-              lookahead_.transform.translation.y = pose_offset.p.y();
-              lookahead_.transform.translation.z = pose_offset.p.z();
+              lookahead_.transform.translation.x = std::isnan(pose_offset.p.x()) ? 0.0 : pose_offset.p.x();
+              lookahead_.transform.translation.y = std::isnan(pose_offset.p.y()) ? 0.0 : pose_offset.p.y();
+              lookahead_.transform.translation.z = std::isnan(pose_offset.p.z()) ? 0.0 : pose_offset.p.z();
               pose_offset.M.GetQuaternion(lookahead_.transform.rotation.x, lookahead_.transform.rotation.y,
                                           lookahead_.transform.rotation.z, lookahead_.transform.rotation.w);
               idx_memory = idx_;
@@ -203,9 +203,9 @@ void PurePursuit::cmd_generator(nav_msgs::Odometry odom)
           double x_ld = (-b + copysign(D,v_)) / (2*a);
           double y_ld = k_end * x_ld + l_end;
           
-          lookahead_.transform.translation.x = x_ld;
-          lookahead_.transform.translation.y = y_ld;
-          lookahead_.transform.translation.z = goal_offset.p.z();
+          lookahead_.transform.translation.x = std::isnan(x_ld) ? 0.0 : x_ld;
+          lookahead_.transform.translation.y = std::isnan(y_ld) ? 0.0 : y_ld;
+          lookahead_.transform.translation.z = std::isnan(goal_offset.p.z()) ? 0.0 : goal_offset.p.z();
           goal_offset.M.GetQuaternion(lookahead_.transform.rotation.x, lookahead_.transform.rotation.y,
                                       lookahead_.transform.rotation.z, lookahead_.transform.rotation.w);
         }
@@ -269,6 +269,8 @@ void PurePursuit::cmd_generator(nav_msgs::Odometry odom)
       lookahead_.header.stamp = ros::Time::now();
       tf_broadcaster_.sendTransform(lookahead_);
       // Publish the velocity command
+      cmd_vel_.angular.z = std::isnan(cmd_vel_.angular.z) ? 0.0 : cmd_vel_.angular.z;
+
       pub_vel_.publish(cmd_vel_);
       // Publish the ackerman_steering command
       pub_acker_.publish(cmd_acker_);
@@ -300,9 +302,9 @@ void PurePursuit::cmd_generator(nav_msgs::Odometry odom)
       {
         lookahead_marker_.id = idx_memory;
         idx_memory += 1;
-        lookahead_marker_.pose.position.x = tf.transform.translation.x;
-        lookahead_marker_.pose.position.y = tf.transform.translation.y;
-        lookahead_marker_.pose.position.z = tf.transform.translation.z;
+        lookahead_marker_.pose.position.x = std::isnan(tf.transform.translation.x) ? 0.0 : tf.transform.translation.x;
+        lookahead_marker_.pose.position.y = std::isnan(tf.transform.translation.y) ? 0.0 : tf.transform.translation.y;
+        lookahead_marker_.pose.position.z = std::isnan(tf.transform.translation.z) ? 0.0 : tf.transform.translation.z;
         lookahead_marker_.color.r = 1.0;
         lookahead_marker_.color.g = 0.0;
         lookahead_marker_.color.b = 0.0;
@@ -348,6 +350,8 @@ void PurePursuit::goal_orientation_control(const geometry_msgs::Pose& goal_pose,
         cmd_vel_.angular.z = 0.0;
         *orient_reached = true;
     }
+    cmd_vel_.angular.z = std::isnan(cmd_vel_.angular.z) ? 0.0 : cmd_vel_.angular.z;
+
     pub_vel_.publish(cmd_vel_);
 }
 
