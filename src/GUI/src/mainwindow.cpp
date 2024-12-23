@@ -8,6 +8,7 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     execute_shell_cmd("bash ~/catkin_ws/src/amr_ros/scripts/amr_start.sh");
+    execute_shell_cmd("python3 ~/catkin_ws/src/amr_ros/scripts/set_voice_device.py");
 
     //restore last configuration
     readSettings();
@@ -87,11 +88,17 @@ MainWindow::MainWindow(QWidget *parent)
     ui->pushButton_Navi_Script_Clear->setEnabled(false);
     ui->pushButton_Navi_Run->setEnabled(false);
     ui->pushButton_Next_Target->setEnabled(false);
+    if(ui->radioButton_Waypoint_First->isChecked())
+    {
+        ui->spinBox_Waypoint_Wait->setValue(0);
+        ui->spinBox_Waypoint_Wait->setEnabled(false);
+        ui->spinBox_Waypoint_Angle->setValue(0);
+        ui->spinBox_Waypoint_Angle->setEnabled(false);
+    }
 
     //Regist navi object
     robot_cur_pose = {0,0,0,0,0,0,1};
     route_distance = 0.0;
-
 
     last_point.resize(7);
     last_point.fill(0.0);
@@ -1406,6 +1413,7 @@ void MainWindow::on_radioButton_Waypoint_Final_clicked()
 {
     ui->spinBox_Waypoint_Wait->setValue(-1);
     ui->spinBox_Waypoint_Wait->setEnabled(false);
+    ui->spinBox_Waypoint_Angle->setEnabled(true);
 }
 
 
@@ -1413,6 +1421,8 @@ void MainWindow::on_radioButton_Waypoint_First_clicked()
 {
     ui->spinBox_Waypoint_Wait->setValue(0);
     ui->spinBox_Waypoint_Wait->setEnabled(false);
+    ui->spinBox_Waypoint_Angle->setValue(0);
+    ui->spinBox_Waypoint_Angle->setEnabled(false);
 }
 
 
@@ -1420,5 +1430,6 @@ void MainWindow::on_radioButton_Waypoint_Middle_clicked()
 {
     ui->spinBox_Waypoint_Wait->setValue(0);
     ui->spinBox_Waypoint_Wait->setEnabled(true);
+    ui->spinBox_Waypoint_Angle->setEnabled(true);
 }
 
