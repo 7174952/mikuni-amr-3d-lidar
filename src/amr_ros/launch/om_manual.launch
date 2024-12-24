@@ -2,7 +2,7 @@
 <launch>
 
     <node pkg="joy" name="joy_node" type="joy_node">
-        <param name="device" value="/dev/input/js0"/>
+        <param name="dev" value="/dev/input/js-joystick"/>
     </node>
 
     <include file="$(find om_modbus_master)/launch/om_modbusRTU.launch"/>
