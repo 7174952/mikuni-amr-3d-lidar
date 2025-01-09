@@ -84,6 +84,12 @@ public:
     int process_num =16;
     int person_state = 0;
 
+    const QMap<QString, QString> user_language = {
+        {"English","en"},
+        {"日本語","ja"},
+        {"中文","zh"}
+    };
+
     QString navi_route_name;
 
     struct Robot_Pose

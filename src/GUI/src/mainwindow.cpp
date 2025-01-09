@@ -161,6 +161,7 @@ void MainWindow::writeSettings()
      settings.setValue("GuideEnable", ui->checkBox_Guide_Enable->isChecked());
      settings.setValue("WithMic", ui->checkBox_With_Mic->isChecked());
      settings.setValue("ControlEnable", ui->checkBox_Voice_Control_En->isChecked());
+     settings.setValue("userLanguage", ui->comboBox_language->currentText());
 
 }
 
@@ -180,6 +181,10 @@ void MainWindow::readSettings()
     ui->checkBox_Guide_Enable->setChecked(settings.value("GuideEnable",false).toBool());
     ui->checkBox_With_Mic->setChecked(settings.value("WithMic",false).toBool());
     ui->checkBox_Voice_Control_En->setChecked(settings.value("ControlEnable",false).toBool());
+
+    for(const QString str : user_language.keys())
+        ui->comboBox_language->addItem(str);
+    ui->comboBox_language->setCurrentText(settings.value("userLanguage","English").toString());
 
 }
 void MainWindow::initWaypoints()
@@ -981,7 +986,10 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
         {
             if(launchNaviVoiceCtrlEnvProcess->state() == QProcess::NotRunning)
             {
-                start_process(launchNaviVoiceCtrlEnvProcess, "bash -c \"source ~/myenv3.9/bin/activate && roslaunch amr_ros om_navi_voice_control.launch\"");
+                QString command = QString("bash -c \"source ~/myenv3.9/bin/activate && roslaunch amr_ros om_navi_voice_control.launch voice_lang:=%1\"")
+                                          .arg(user_language[ui->comboBox_language->currentText()]);
+
+                start_process(launchNaviVoiceCtrlEnvProcess, command);
             }
         }
         ui->pushButton_Navi_StartUp->setText("Finish Navigation");
