@@ -1,8 +1,11 @@
 <?xml version="1.0"?>
 <launch>
 
+<arg name="voice_lang" default="zh"/>
+
 <!-- voice control -->
 <node name="voice_chat_node" pkg="amr_ros" type="voice_chat_demo.py" output="screen">
+    <param name="language" value="$(arg voice_lang)"/>
 </node>
 
 </launch>
