@@ -54,6 +54,8 @@ std::queue<om_cart::om_cart_cmd> cmd_msg_buf;
 double vel_wait_timer = 0; //Make sure to be stopped when no command arrived
 const uint32_t MAX_WAIT_TIME = 50; //50=>0.5s
 
+bool gear_rate_above_20_1;
+
 // long double confineRadian(long double rad);
 void om_state_callback(const om_modbus_master::om_state::ConstPtr& msg);
 void om_resp_callback(const om_modbus_master::om_response::ConstPtr& msg);
@@ -283,6 +285,7 @@ void update()
                     cmd_info.data[i] = msg.data[i];
                 }
 
+                cmd_info.set_speed.vel_line = (gear_rate_above_20_1 == true) ? (-1*cmd_info.set_speed.vel_line) : cmd_info.set_speed.vel_line;
                 om_data.drive_cart_cmd(CART_ID, cmd_info.set_speed.vel_line*100000, cmd_info.set_speed.vel_theta*100, &om_query_pub);
                 wait();
                 om_data.update_share_state(CART_ID, &om_query_pub);
@@ -337,6 +340,8 @@ int main(int argc, char **argv)
 
     //set motor 1(lock)-0(unlock)
     ros::ServiceServer service_srv = nh.advertiseService("motor_lock", &set_motor);
+    nh.param("/om_cart/gear_rate_above_20_1",gear_rate_above_20_1, true);
+
 
     //init velocity publisher
     double initTime = ros::Time::now().toSec();
