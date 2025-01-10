@@ -329,7 +329,9 @@ void MainWindow::navi_status_callback(const std_msgs::String::ConstPtr& msg)
             startStop_flag.is_essay_playing = true;
             //essay for target location arrived
             //greet for finished
-            greet_player->setMedia(QUrl::fromLocalFile(location_essay.value(navi_route_status.current_location)));
+            greet_player->setMedia(QUrl::fromLocalFile(location_essay.value(navi_route_status.current_location) + "/"
+                                                     + location_essay.value(navi_route_status.current_location).split("/").last() + "_"
+                                                     + user_language[ui->comboBox_language->currentText()] + ".mp3"));
             greet_player->play();
             // 连接信号到槽函数
             connect(greet_player, &QMediaPlayer::mediaStatusChanged, this, [=](QMediaPlayer::MediaStatus status)
@@ -745,7 +747,7 @@ void MainWindow::on_pushButton_Route_Record_clicked()
     if(startStop_flag.is_recording_route == false)
     {
         //Check if FROM not equal TO.
-        if(ui->comboBox_Route_From->currentText().contains(ui->comboBox_Route_To->currentText()))
+        if(ui->comboBox_Route_From->currentText() == ui->comboBox_Route_To->currentText())
         {
             QMessageBox::warning(this,"Warnig","Cannot make route from [" + ui->comboBox_Route_From->currentText()
                                         + "] to [" + ui->comboBox_Route_To->currentText() + "]");
@@ -984,6 +986,7 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
         //startup voice control module
         if(ui->checkBox_With_Mic->isChecked())
         {
+#if 0 //debug_ryu
             if(launchNaviVoiceCtrlEnvProcess->state() == QProcess::NotRunning)
             {
                 QString command = QString("bash -c \"source ~/myenv3.9/bin/activate && roslaunch amr_ros om_navi_voice_control.launch voice_lang:=%1\"")
@@ -991,6 +994,7 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
 
                 start_process(launchNaviVoiceCtrlEnvProcess, command);
             }
+#endif
         }
         ui->pushButton_Navi_StartUp->setText("Finish Navigation");
 
@@ -1025,7 +1029,7 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
         }
 
         //greet for startup
-        greet_player->setMedia(QUrl::fromLocalFile(RootPath + "/catkin_ws/src/amr_ros/resource/greet_startup_navi_ja.mp3"));
+        greet_player->setMedia(QUrl::fromLocalFile(RootPath + "/catkin_ws/src/amr_ros/resource/greet_startup_navi_" + user_language[ui->comboBox_language->currentText()] + ".mp3"));
         greet_player->play();
 
     }
@@ -1033,7 +1037,7 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
     {
         player_bgm->stop();
         //greet for finished
-        greet_player->setMedia(QUrl::fromLocalFile(RootPath + "/catkin_ws/src/amr_ros/resource/greet_finish_navi_ja.mp3"));
+        greet_player->setMedia(QUrl::fromLocalFile(RootPath + "/catkin_ws/src/amr_ros/resource/greet_finish_navi_"+user_language[ui->comboBox_language->currentText()]+".mp3"));
         greet_player->play();
 
 
@@ -1045,7 +1049,9 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
         //terminate voice/mic process
         if(ui->checkBox_With_Mic->isChecked())
         {
+#if 0 //debug_ryu
             terminate_process(launchNaviVoiceCtrlEnvProcess);
+#endif
         }
         terminate_process(launchNaviProcess);
 
@@ -1362,20 +1368,26 @@ void MainWindow::on_pushButton_Upload_Location_clicked()
 void MainWindow::on_pushButton_Select_Essay_clicked()
 {
     QString default_path = RootPath + "/catkin_ws/src/amr_ros/resource/";
-    QString fileName = QFileDialog::getOpenFileName(this, "Open File", default_path, "Text(*.mp3);;All (*.*)");
-    if(fileName.isEmpty()) //cancel
+    QString introduce_audio_path = QFileDialog::getExistingDirectory(
+                this,
+                "Select Folder",
+                default_path,
+                QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks
+            );
+
+
+    if(introduce_audio_path.isEmpty()) //cancel
     {
         return;
     }
-    ui->lineEdit_Essay_Path->setText(fileName);
+    ui->lineEdit_Essay_Path->setText(introduce_audio_path);
     if(ui->comboBox_Location_Essay->currentText().isEmpty())
     {
         QMessageBox::warning(this,"Warning","Please Select location first!");
         return;
     }
-    location_essay[ui->comboBox_Location_Essay->currentText()] = fileName;
+    location_essay[ui->comboBox_Location_Essay->currentText()] = introduce_audio_path;
     ui->comboBox_Location_Essay->setItemData(ui->comboBox_Location_Essay->currentIndex() ,QBrush(Qt::green),Qt::ForegroundRole);
-
 
 }
 

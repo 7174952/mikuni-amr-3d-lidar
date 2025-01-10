@@ -312,11 +312,11 @@ background-color: rgb(220, 255, 219);
        <x>50</x>
        <y>60</y>
        <width>391</width>
-       <height>41</height>
+       <height>51</height>
       </rect>
      </property>
      <property name="styleSheet">
-      <string notr="true">font: 12pt &quot;Times New Roman&quot;;
+      <string notr="true">font: 18pt &quot;Times New Roman&quot;;
 background-color: rgb(220, 255, 219);</string>
      </property>
      <property name="text">
@@ -371,11 +371,11 @@ background-color: rgb(255, 255, 219);</string>
        <x>20</x>
        <y>30</y>
        <width>471</width>
-       <height>51</height>
+       <height>71</height>
       </rect>
      </property>
      <property name="styleSheet">
-      <string notr="true">font: 14pt &quot;Times New Roman&quot;;</string>
+      <string notr="true">font: 18pt &quot;Times New Roman&quot;;</string>
      </property>
      <property name="text">
       <string>Startup Navigation</string>
@@ -385,13 +385,13 @@ background-color: rgb(255, 255, 219);</string>
      <property name="geometry">
       <rect>
        <x>20</x>
-       <y>430</y>
+       <y>460</y>
        <width>471</width>
-       <height>41</height>
+       <height>61</height>
       </rect>
      </property>
      <property name="styleSheet">
-      <string notr="true">font: 14pt &quot;Times New Roman&quot;;</string>
+      <string notr="true">font: 18pt &quot;Times New Roman&quot;;</string>
      </property>
      <property name="text">
       <string>RUN</string>
@@ -470,7 +470,7 @@ background-color: rgb(255, 255, 219);</string>
      <widget class="QLabel" name="label_Waypoint_Angle">
       <property name="geometry">
        <rect>
-        <x>150</x>
+        <x>140</x>
         <y>110</y>
         <width>121</width>
         <height>20</height>
@@ -483,10 +483,10 @@ background-color: rgb(255, 255, 219);</string>
      <widget class="QSpinBox" name="spinBox_Waypoint_Angle">
       <property name="geometry">
        <rect>
-        <x>280</x>
+        <x>260</x>
         <y>110</y>
-        <width>71</width>
-        <height>23</height>
+        <width>81</width>
+        <height>31</height>
        </rect>
       </property>
       <property name="minimum">
@@ -499,7 +499,7 @@ background-color: rgb(255, 255, 219);</string>
      <widget class="QLabel" name="label_Waypoint_WaitTime">
       <property name="geometry">
        <rect>
-        <x>190</x>
+        <x>180</x>
         <y>70</y>
         <width>71</width>
         <height>20</height>
@@ -512,10 +512,10 @@ background-color: rgb(255, 255, 219);</string>
      <widget class="QSpinBox" name="spinBox_Waypoint_Wait">
       <property name="geometry">
        <rect>
-        <x>280</x>
+        <x>260</x>
         <y>70</y>
-        <width>71</width>
-        <height>23</height>
+        <width>81</width>
+        <height>31</height>
        </rect>
       </property>
       <property name="minimum">
@@ -528,10 +528,10 @@ background-color: rgb(255, 255, 219);</string>
      <widget class="QPushButton" name="pushButton_Waypoint_Add">
       <property name="geometry">
        <rect>
-        <x>380</x>
-        <y>80</y>
-        <width>71</width>
-        <height>41</height>
+        <x>370</x>
+        <y>70</y>
+        <width>81</width>
+        <height>61</height>
        </rect>
       </property>
       <property name="styleSheet">
@@ -546,8 +546,8 @@ background-color: rgb(255, 255, 219);</string>
        <rect>
         <x>10</x>
         <y>60</y>
-        <width>111</width>
-        <height>31</height>
+        <width>121</width>
+        <height>41</height>
        </rect>
       </property>
       <property name="styleSheet">
@@ -561,7 +561,7 @@ background-color: rgb(255, 255, 219);</string>
        <x>20</x>
        <y>280</y>
        <width>471</width>
-       <height>131</height>
+       <height>161</height>
       </rect>
      </property>
      <property name="styleSheet">
@@ -589,9 +589,9 @@ background-color: rgb(255, 255, 219);</string>
       </property>
       <property name="geometry">
        <rect>
-        <x>10</x>
+        <x>20</x>
         <y>30</y>
-        <width>291</width>
+        <width>281</width>
         <height>31</height>
        </rect>
       </property>
@@ -609,9 +609,12 @@ background-color: rgb(255, 255, 219);</string>
        <rect>
         <x>170</x>
         <y>80</y>
-        <width>91</width>
-        <height>41</height>
+        <width>131</width>
+        <height>61</height>
        </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">font: 16pt &quot;Times New Roman&quot;;</string>
       </property>
       <property name="text">
        <string>Save Script</string>
@@ -620,11 +623,14 @@ background-color: rgb(255, 255, 219);</string>
      <widget class="QPushButton" name="pushButton_Navi_Load_Script">
       <property name="geometry">
        <rect>
-        <x>50</x>
+        <x>20</x>
         <y>80</y>
-        <width>91</width>
-        <height>41</height>
+        <width>131</width>
+        <height>61</height>
        </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">font: 16pt &quot;Times New Roman&quot;;</string>
       </property>
       <property name="text">
        <string>Load Script</string>
@@ -633,10 +639,10 @@ background-color: rgb(255, 255, 219);</string>
      <widget class="QPushButton" name="pushButton_Navi_Script_Clear">
       <property name="geometry">
        <rect>
-        <x>320</x>
-        <y>80</y>
+        <x>330</x>
+        <y>90</y>
         <width>81</width>
-        <height>41</height>
+        <height>51</height>
        </rect>
       </property>
       <property name="text">
@@ -647,22 +653,22 @@ background-color: rgb(255, 255, 219);</string>
     <widget class="QPushButton" name="pushButton_Next_Target">
      <property name="geometry">
       <rect>
-       <x>160</x>
-       <y>500</y>
-       <width>171</width>
-       <height>71</height>
+       <x>140</x>
+       <y>540</y>
+       <width>221</width>
+       <height>91</height>
       </rect>
      </property>
      <property name="font">
       <font>
        <family>Times New Roman</family>
-       <pointsize>14</pointsize>
+       <pointsize>18</pointsize>
        <italic>false</italic>
        <bold>false</bold>
       </font>
      </property>
      <property name="styleSheet">
-      <string notr="true">font: 14pt &quot;Times New Roman&quot;;</string>
+      <string notr="true">font: 18pt &quot;Times New Roman&quot;;</string>
      </property>
      <property name="text">
       <string>Next Target</string>
@@ -671,10 +677,10 @@ background-color: rgb(255, 255, 219);</string>
     <widget class="QTextEdit" name="textEdit_debug_info">
      <property name="geometry">
       <rect>
-       <x>40</x>
-       <y>620</y>
-       <width>461</width>
-       <height>81</height>
+       <x>30</x>
+       <y>640</y>
+       <width>471</width>
+       <height>71</height>
       </rect>
      </property>
     </widget>
@@ -718,11 +724,11 @@ background-color: rgb(170, 255, 255);</string>
        <x>50</x>
        <y>60</y>
        <width>391</width>
-       <height>41</height>
+       <height>51</height>
       </rect>
      </property>
      <property name="styleSheet">
-      <string notr="true">font: 12pt &quot;Times New Roman&quot;;
+      <string notr="true">font: 18pt &quot;Times New Roman&quot;;
 </string>
      </property>
      <property name="text">
@@ -733,7 +739,7 @@ background-color: rgb(170, 255, 255);</string>
      <property name="geometry">
       <rect>
        <x>50</x>
-       <y>120</y>
+       <y>130</y>
        <width>201</width>
        <height>32</height>
       </rect>
@@ -762,7 +768,7 @@ background-color: rgb(170, 255, 255);</string>
      <property name="geometry">
       <rect>
        <x>50</x>
-       <y>160</y>
+       <y>170</y>
        <width>201</width>
        <height>32</height>
       </rect>
@@ -792,8 +798,8 @@ background-color: rgb(170, 255, 255);</string>
       <rect>
        <x>280</x>
        <y>130</y>
-       <width>151</width>
-       <height>51</height>
+       <width>161</width>
+       <height>71</height>
       </rect>
      </property>
      <property name="styleSheet">
