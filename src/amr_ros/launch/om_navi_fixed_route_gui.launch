@@ -1,9 +1,13 @@
 <?xml version="1.0"?>
 <launch>
 
+<arg name="gear_rate_above_20_1" default="true"/>
+
 <include file="$(find om_modbus_master)/launch/om_modbusRTU.launch"/>
 
-<node pkg="om_cart" name="om_cart" type="om_cart"/>
+<node pkg="om_cart" name="om_cart" type="om_cart">
+    <param name="gear_rate_above_20_1" value="$(arg gear_rate_above_20_1)"/>
+</node>
 
 <!--map load-->
 <arg name="static_map" default="rd_ryu1"/>
