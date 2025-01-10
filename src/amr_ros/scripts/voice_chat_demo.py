@@ -68,14 +68,18 @@ voice_resp: Dict[str, Dict[str,str]] = {
 }
 
 wakeup_dict: Dict[str, List[str]] = {
-    "ja": ["みくろ","ミクロ"],
+    "ja": ["みくろ","ミクロ","ピクロ","ぴくろ","ビクロ","びくろ","リクロ","りくろ"],
     "zh": ["小度小度", "小杜小杜","小肚小肚","小渡小渡"],
 }
 
 
 def update_voice_mode(msg):
     global voice_mode
+    global tts_stop
     voice_mode = msg.data
+
+    if voice_mode != "chat":
+        tts_stop = True
     rospy.loginfo(f"Updated voice_mode: {voice_mode}")
 
 # 初始化ROS订阅者
@@ -388,7 +392,7 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
 
     # 建立一个发布器，将识别文本发布到 /voice_result
-    pub = rospy.Publisher("/voice_result", String, queue_size=10)
+    pub = rospy.Publisher("/voice_result", String, queue_size=10)    
     # 获取语言参数
     global language
     global nlp
@@ -427,6 +431,8 @@ def main():
     while not rospy.is_shutdown() and not stop_event.is_set():
         time.sleep(0.1)
 
+    global tts_stop
+    tts_stop = True
     # 收尾：停止录音
     rospy.loginfo("停止录音流...")
     stream.stop_stream()
