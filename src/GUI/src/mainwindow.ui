@@ -132,7 +132,7 @@ background-color: rgb(170, 220, 255);</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>120</y>
+       <y>170</y>
        <width>231</width>
        <height>32</height>
       </rect>
@@ -260,7 +260,7 @@ background-color: rgb(170, 220, 255);</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>160</y>
+       <y>120</y>
        <width>231</width>
        <height>32</height>
       </rect>
@@ -287,6 +287,22 @@ background-color: rgb(170, 220, 255);</string>
        </widget>
       </item>
      </layout>
+    </widget>
+    <widget class="QPushButton" name="pushButton_Init_Robot_Pose">
+     <property name="geometry">
+      <rect>
+       <x>260</x>
+       <y>170</y>
+       <width>261</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font: 12pt &quot;Times New Roman&quot;;</string>
+     </property>
+     <property name="text">
+      <string>Init Robot Startup Pose</string>
+     </property>
     </widget>
    </widget>
    <widget class="QGroupBox" name="groupBox_MapMaker">

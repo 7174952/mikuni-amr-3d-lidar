@@ -185,6 +185,8 @@ private slots:
 
     void on_radioButton_Waypoint_Middle_clicked();
 
+    void on_pushButton_Init_Robot_Pose_clicked();
+
 private:
     void writeSettings();
     void readSettings();

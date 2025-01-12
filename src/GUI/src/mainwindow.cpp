@@ -612,7 +612,7 @@ bool MainWindow::getStartupCordinate()
             {
                 QString line = data_in.readLine().trimmed();
                 QString location_name = line.split(":").at(0);
-                if(location_name.contains(ui->comboBox_Startup_Location->currentText()))
+                if(location_name == ui->comboBox_Startup_Location->currentText())
                 {
                     QStringList val_list = line.split(":").at(1).split(",");
                     init_waypoint.waypoint_name = location_name;
@@ -1451,5 +1451,27 @@ void MainWindow::on_radioButton_Waypoint_Middle_clicked()
     ui->spinBox_Waypoint_Wait->setValue(0);
     ui->spinBox_Waypoint_Wait->setEnabled(true);
     ui->spinBox_Waypoint_Angle->setEnabled(true);
+}
+
+
+void MainWindow::on_pushButton_Init_Robot_Pose_clicked()
+{
+    init_waypoint = {"origin", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0};
+    getStartupCordinate();
+
+    QProcess* init_robot_pose_process = new QProcess(this);
+
+    start_process(init_robot_pose_process, QString("roslaunch amr_ros om_init_robot_pose.launch ")
+            + " init_pos_x:=" + QString::number(init_waypoint.pose.pos_x)
+            + " init_pos_y:=" + QString::number(init_waypoint.pose.pos_y)
+            + " init_pos_z:=" + QString::number(init_waypoint.pose.pos_z)
+            + " init_ori_x:=" + QString::number(init_waypoint.pose.ori_x)
+            + " init_ori_y:=" + QString::number(init_waypoint.pose.ori_y)
+            + " init_ori_z:=" + QString::number(init_waypoint.pose.ori_z)
+            + " init_ori_w:=" + QString::number(init_waypoint.pose.ori_w));
+
+    init_robot_pose_process->waitForFinished(10000);
+
+
 }
 
