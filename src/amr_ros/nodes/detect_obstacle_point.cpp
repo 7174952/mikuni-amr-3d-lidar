@@ -39,6 +39,10 @@ bool is_near_goal = false;
 int32_t obstacle_points_num = 0;
 int32_t obstacle_lim = 0;
 
+double robot_width;
+double robot_width_tolerance;
+
+
 //Control speed by the distance of person behind of cart
 struct Speed_Ctrl
 {
@@ -174,7 +178,7 @@ void cloudCB(const sensor_msgs::PointCloud2ConstPtr& input)
     pass.setInputCloud(cloud_input);
     pass.filter(*cloud_input);
 
-    const double width = 0.52;
+    double obstal_width = robot_width + robot_width_tolerance * 2;
     const double ratio = 2.0; //3.0
 
     double max_filter_dist = 0;
@@ -193,7 +197,7 @@ void cloudCB(const sensor_msgs::PointCloud2ConstPtr& input)
         //TODO: min is too small z,floor is not removed
         if (turning_radius > 0) {
             // Set min and max for positive turning_radius
-            boxFilter.setMin(Eigen::Vector4f(0, -width/2, OBST_HIGHT_MIN_Z, 1.0));
+            boxFilter.setMin(Eigen::Vector4f(0, -obstal_width/2, OBST_HIGHT_MIN_Z, 1.0));
             max_filter_dist = is_near_goal ? goal_distance : turning_radius * std::sin(center_angle);
             boxFilter.setMax(Eigen::Vector4f(max_filter_dist, turning_radius, OBST_HIGHT_MAX_Z, 1.0));
 
@@ -202,14 +206,14 @@ void cloudCB(const sensor_msgs::PointCloud2ConstPtr& input)
             // Set min and max for negative turning_radius
             boxFilter.setMin(Eigen::Vector4f(0, turning_radius, OBST_HIGHT_MIN_Z, 1.0));
             max_filter_dist = is_near_goal ? goal_distance : turning_radius * std::sin(center_angle);
-            boxFilter.setMax(Eigen::Vector4f(max_filter_dist, width/2, OBST_HIGHT_MAX_Z, 1.0));
+            boxFilter.setMax(Eigen::Vector4f(max_filter_dist, obstal_width/2, OBST_HIGHT_MAX_Z, 1.0));
 
         }
         boxFilter.setInputCloud(cloud_input);
         boxFilter.filter(*cloud_input);
 
-        double inner_radius = abs(turning_radius) - width/2; // Set your desired distance
-        double outer_radius = abs(turning_radius) + width/2; // Set your desired distance
+        double inner_radius = abs(turning_radius) - obstal_width/2; // Set your desired distance
+        double outer_radius = abs(turning_radius) + obstal_width/2; // Set your desired distance
 
 
         // Iterate over the points in the point cloud
@@ -230,9 +234,9 @@ void cloudCB(const sensor_msgs::PointCloud2ConstPtr& input)
     {
         // Create the filtering object
         pcl::CropBox<pcl::PointXYZ> boxFilter;
-        boxFilter.setMin(Eigen::Vector4f(0.0, -width/2, OBST_HIGHT_MIN_Z, 1.0));
+        boxFilter.setMin(Eigen::Vector4f(0.0, -obstal_width/2, OBST_HIGHT_MIN_Z, 1.0));
         max_filter_dist = is_near_goal ? goal_distance : linear_velocity*ratio;
-        boxFilter.setMax(Eigen::Vector4f(max_filter_dist, width/2, OBST_HIGHT_MAX_Z, 1.0));
+        boxFilter.setMax(Eigen::Vector4f(max_filter_dist, obstal_width/2, OBST_HIGHT_MAX_Z, 1.0));
         boxFilter.setInputCloud(cloud_input);
         boxFilter.filter(*filtered_cloud);
 
@@ -354,6 +358,8 @@ int main (int argc, char** argv)
     nh.param("kp", speed_ctrl.kp, 1.0);
     voice_ctrl.voice_ctrl_enable = false;
     nh.param("voice_ctrl_enable", voice_ctrl.voice_ctrl_enable, false);
+    nh.param("robot_width", robot_width, 0.5);
+    nh.param("robot_width_tolerance", robot_width_tolerance, 0.1);
 
     pub_close_points = nh.advertise<sensor_msgs::PointCloud2>("/obstacle_points", 10);
 
