@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<launch>
+
+<arg name="init_pos_x" default="0.2"/>
+<arg name="init_pos_y" default="0.2"/>
+<arg name="init_pos_z" default="0.3"/>
+<arg name="init_ori_x" default="0.1"/>
+<arg name="init_ori_y" default="0.2"/>
+<arg name="init_ori_z" default="0.3"/>
+<arg name="init_ori_w" default="-1.0"/>
+
+<!-- voice control -->
+<node name="init_robot_pose" pkg="amr_ros" type="init_robot_pose.py" output="screen">
+    <param name="init_pos_x" value="$(arg init_pos_x)"/>
+    <param name="init_pos_y" value="$(arg init_pos_y)"/>
+    <param name="init_pos_z" value="$(arg init_pos_z)"/>
+    <param name="init_ori_x" value="$(arg init_ori_x)"/>    
+    <param name="init_ori_y" value="$(arg init_ori_y)"/>
+    <param name="init_ori_z" value="$(arg init_ori_z)"/>   
+    <param name="init_ori_w" value="$(arg init_ori_w)"/> 
+</node>
+
+</launch>
