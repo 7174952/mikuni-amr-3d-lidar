@@ -8,7 +8,7 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     execute_shell_cmd("bash ~/catkin_ws/src/amr_ros/scripts/amr_start.sh");
-    execute_shell_cmd("python3 ~/catkin_ws/src/amr_ros/scripts/set_voice_device.py");
+    // execute_shell_cmd("python3 ~/catkin_ws/src/amr_ros/scripts/set_voice_device.py");
 
     //restore last configuration
     readSettings();
@@ -266,7 +266,7 @@ void MainWindow::obstacle_CallBack(const std_msgs::Int32::ConstPtr& msg)
             }
             //greet for finished
             QMediaPlaylist *playlist = new QMediaPlaylist(this);
-            playlist->addMedia(QUrl::fromLocalFile(RootPath + "/catkin_ws/src/amr_ros/resource/obstacle_alert_ja.mp3"));
+            playlist->addMedia(QUrl::fromLocalFile(RootPath + "/catkin_ws/src/amr_ros/resource/obstacle_alert_" + user_language[ui->comboBox_language->currentText()] + ".mp3"));
             // 设置播放模式为循环播放
             playlist->setPlaybackMode(QMediaPlaylist::Loop);
             // 将播放列表设置为播放器的播放源
@@ -285,7 +285,9 @@ void MainWindow::obstacle_CallBack(const std_msgs::Int32::ConstPtr& msg)
         startStop_flag.is_obst_playing = false;
 
         //replay bgm
-        if(navi_route_status.robot_state == "running")
+        if(    (startStop_flag.is_navi_Startup == true)
+            && (startStop_flag.is_navi_running == true)
+            && (navi_route_status.robot_state == "running"))
         {
             if(ui->checkBox_With_Mic->isChecked() == false || ui->checkBox_Voice_Control_En->isChecked() == false)
             {
@@ -1036,6 +1038,7 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
     else
     {
         player_bgm->stop();
+        obst_player->stop();
         //greet for finished
         greet_player->setMedia(QUrl::fromLocalFile(RootPath + "/catkin_ws/src/amr_ros/resource/greet_finish_navi_"+user_language[ui->comboBox_language->currentText()]+".mp3"));
         greet_player->play();
@@ -1136,7 +1139,8 @@ void MainWindow::on_pushButton_Navi_Run_clicked()
         ui->pushButton_Navi_Save_Script->setEnabled(true);
         ui->pushButton_Navi_Script_Clear->setEnabled(true);
         ui->checkBox_Route_Auto_Next->setEnabled(true);
-
+        obst_player->stop();
+        player_bgm->stop();
     }
 
 }

@@ -13,6 +13,9 @@
   <property name="windowTitle">
    <string>MainWindow</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true">selection-color: rgb(255, 85, 0);</string>
+  </property>
   <widget class="QWidget" name="centralwidget" native="true">
    <property name="geometry">
     <rect>
@@ -44,7 +47,7 @@
       <x>20</x>
       <y>100</y>
       <width>541</width>
-      <height>211</height>
+      <height>231</height>
      </rect>
     </property>
     <property name="styleSheet">
@@ -132,7 +135,7 @@ background-color: rgb(170, 220, 255);</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>170</y>
+       <y>180</y>
        <width>231</width>
        <height>32</height>
       </rect>
@@ -260,7 +263,7 @@ background-color: rgb(170, 220, 255);</string>
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>120</y>
+       <y>130</y>
        <width>231</width>
        <height>32</height>
       </rect>
@@ -291,14 +294,14 @@ background-color: rgb(170, 220, 255);</string>
     <widget class="QPushButton" name="pushButton_Init_Robot_Pose">
      <property name="geometry">
       <rect>
-       <x>260</x>
+       <x>290</x>
        <y>170</y>
-       <width>261</width>
-       <height>31</height>
+       <width>201</width>
+       <height>51</height>
       </rect>
      </property>
      <property name="styleSheet">
-      <string notr="true">font: 12pt &quot;Times New Roman&quot;;</string>
+      <string notr="true">font: 14pt &quot;Times New Roman&quot;;</string>
      </property>
      <property name="text">
       <string>Init Robot Startup Pose</string>
@@ -309,7 +312,7 @@ background-color: rgb(170, 220, 255);</string>
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>320</y>
+      <y>340</y>
       <width>541</width>
       <height>121</height>
      </rect>
@@ -694,9 +697,9 @@ background-color: rgb(255, 255, 219);</string>
      <property name="geometry">
       <rect>
        <x>30</x>
-       <y>640</y>
+       <y>680</y>
        <width>471</width>
-       <height>71</height>
+       <height>31</height>
       </rect>
      </property>
     </widget>
@@ -705,7 +708,7 @@ background-color: rgb(255, 255, 219);</string>
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>450</y>
+      <y>470</y>
       <width>541</width>
       <height>211</height>
      </rect>
@@ -831,9 +834,9 @@ background-color: rgb(170, 255, 255);</string>
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>670</y>
+      <y>690</y>
       <width>541</width>
-      <height>151</height>
+      <height>131</height>
      </rect>
     </property>
     <property name="styleSheet">
@@ -892,7 +895,7 @@ background-color: rgb(255, 228, 131);</string>
      <property name="geometry">
       <rect>
        <x>20</x>
-       <y>90</y>
+       <y>80</y>
        <width>131</width>
        <height>41</height>
       </rect>
@@ -908,7 +911,7 @@ background-color: rgb(255, 228, 131);</string>
      <property name="geometry">
       <rect>
        <x>220</x>
-       <y>90</y>
+       <y>80</y>
        <width>131</width>
        <height>41</height>
       </rect>
@@ -927,7 +930,7 @@ background-color: rgb(255, 228, 131);</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1235</width>
+     <width>1138</width>
      <height>19</height>
     </rect>
    </property>
