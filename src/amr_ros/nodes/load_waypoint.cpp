@@ -37,12 +37,18 @@ struct Navi_Route_Status
     QString robot_state;       //start,stop, running
     QString current_location;  //A or B, or AB
     QString route_finished;    //true or false
+    QString is_auto_pass;      //true or false at waypoint
+    QString is_front_careless; //true or false
+    QString is_end_careless;   //true or false
     void clear()
     {
         sub_route = "";
         robot_state = "";
         current_location = "";
         route_finished = "";
+        is_auto_pass = "";
+        is_front_careless = "";
+        is_end_careless = "";
     }
 };
 Navi_Route_Status navi_route_status;
@@ -243,18 +249,15 @@ int main(int argc, char** argv)
             navi_route_status.robot_state = "stop";
             navi_route_status.current_location = navi_route_list.front().waypoint_name;
             navi_route_status.route_finished = "false";
+            navi_route_status.is_auto_pass = "false";
+            navi_route_status.is_front_careless = "true";
+            navi_route_status.is_end_careless = "true";
 
             break;
         case NAVI_START_INIT_ROUTE:
             sub_route.clear();
             sub_route.push_back(navi_route_list.at(wp_index));
             wp_index++;
-            //seach not stop waypoints
-            while((wp_index < navi_route_list.size() - 1) && (navi_route_list.at(wp_index).wait_time == 0))
-            {
-                sub_route.push_back(navi_route_list.at(wp_index));
-                wp_index++;
-            }
             sub_route.push_back(navi_route_list.at(wp_index));
             //get sub path route
             //debug
@@ -283,12 +286,15 @@ int main(int argc, char** argv)
                 navi_route_status.sub_route.append(sub_route.at(i).waypoint_name);
                 if(i < sub_route.size() - 1)
                 {
-                    navi_route_status.sub_route.append("-");
+                    navi_route_status.sub_route.append("->");
                 }
             }
             navi_route_status.robot_state = "start";
             navi_route_status.current_location = sub_route.front().waypoint_name;
             navi_route_status.route_finished = "false";
+            navi_route_status.is_auto_pass = "false";
+            navi_route_status.is_front_careless = "true";
+            navi_route_status.is_end_careless = (sub_route.last().wait_time != 0) ? "true" : "false";
 
             navi_state = NAVI_STATE_WAIT_ARRIVED_WAYPOINT;
             break;
@@ -299,12 +305,21 @@ int main(int argc, char** argv)
                 //update navigation status
                 navi_route_status.robot_state = "stop";
                 navi_route_status.current_location = sub_route.back().waypoint_name;
+                navi_route_status.is_auto_pass = "false";
 
                 //check final waypoint
                 if(navi_route_list.at(wp_index).wait_time < 0) //-1: final stopped
                 {
                     navi_route_status.route_finished = "true";
                     navi_state = NAVI_STATE_ARRIVED_GOAL;
+                }
+                else if(navi_route_list.at(wp_index).wait_time == 0)
+                {
+                    //auto continue to run ton next target
+                    navi_route_status.robot_state = "running";
+                    navi_route_status.route_finished = "false";
+                    navi_route_status.is_auto_pass = "true";
+                    navi_state = NAVI_STATE_STOP_AND_WAIT;
                 }
                 else
                 {
@@ -328,18 +343,13 @@ int main(int argc, char** argv)
         case NAVI_STATE_STOP_AND_WAIT:
             curr_time = ros::Time::now();
             if(    ((auto_next_target == true) && ((curr_time.toSec() - last_time.toSec()) > navi_route_list.at(wp_index).wait_time))
-                || ((auto_next_target == false) && (srv_req_next_target == true)))
+                || ((auto_next_target == false) && (srv_req_next_target == true))
+                || (navi_route_status.is_auto_pass == "true"))
             {
                 //prepare for next sub route data
                 sub_route.clear();
                 sub_route.push_back(navi_route_list.at(wp_index));
                 wp_index++;
-                //seach not stop waypoints
-                while((wp_index < navi_route_list.size() - 1) && (navi_route_list.at(wp_index).wait_time == 0))
-                {
-                    sub_route.push_back(navi_route_list.at(wp_index));
-                    wp_index++;
-                }
                 sub_route.push_back(navi_route_list.at(wp_index));
                 //get next sub path route
 
@@ -365,12 +375,17 @@ int main(int argc, char** argv)
                     navi_route_status.sub_route.append(sub_route.at(i).waypoint_name);
                     if(i < sub_route.size() - 1)
                     {
-                        navi_route_status.sub_route.append("-");
+                        navi_route_status.sub_route.append("->");
                     }
                 }
                 navi_route_status.robot_state = "start";
                 navi_route_status.current_location = sub_route.front().waypoint_name;
                 navi_route_status.route_finished = "false";
+                navi_route_status.is_auto_pass = "false";
+
+                navi_route_status.is_front_careless = (sub_route.first().wait_time != 0) ? "true" : "false";
+                navi_route_status.is_end_careless = (sub_route.last().wait_time != 0) ? "true" : "false";
+
 
                 srv_req_next_target = false;
                 navi_state = NAVI_STATE_WAIT_ARRIVED_WAYPOINT;
@@ -385,7 +400,11 @@ int main(int argc, char** argv)
         msg_navi_route_status.data =  navi_route_status.sub_route.toStdString() + ";"
                                    +  navi_route_status.robot_state.toStdString() + ";"
                                    +  navi_route_status.current_location.toStdString() + ";"
-                                   +  navi_route_status.route_finished.toStdString();
+                                   +  navi_route_status.route_finished.toStdString() + ";"
+                                   +  navi_route_status.is_auto_pass.toStdString() + ";"
+                                   +  navi_route_status.is_front_careless.toStdString() + ";"
+                                   +  navi_route_status.is_end_careless.toStdString();
+
         navi_status_pub.publish(msg_navi_route_status);
 
         ros::spinOnce();
