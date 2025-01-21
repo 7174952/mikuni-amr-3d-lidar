@@ -21,6 +21,7 @@ from playsound import playsound
 import numpy as np
 from zhconv import convert
 from typing import Dict, List
+import datetime
 
 # ------------------- 配置部分 -------------------
 SAMPLE_RATE = 16000          # WebRTC VAD 支持: 8k/16k/32k/48k
@@ -68,9 +69,12 @@ voice_resp: Dict[str, Dict[str,str]] = {
 }
 
 wakeup_dict: Dict[str, List[str]] = {
-    "ja": ["みくろ","ミクロ","ピクロ","ぴくろ","ビクロ","びくろ","リクロ","りくろ"],
-    "zh": ["小度小度", "小杜小杜","小肚小肚","小渡小渡"],
+    "ja": ["みくろ","ミクロ","ピクロ","ぴくろ","ビクロ","びくろ","リクロ","りくろ","案内ロボ","あんないろぼ"],
+    "zh": ["小度", "小杜","小肚","小渡"],
 }
+
+#save log
+current_time_str = "/home/mikuni/catkin_ws/logs/voice_" + datetime.datetime.now().strftime("%Y%m%d_%H_%M_%S")
 
 
 def update_voice_mode(msg):
@@ -152,6 +156,14 @@ def whisper_worker(pub):
                 text = convert(text, 'zh-hans') #转换为中文简体
 
             rospy.loginfo("Whisper 识别结果: %s", text)
+            #debug_ryu
+            #write log
+            with open(current_time_str, 'a', encoding='utf-8') as f:
+                time_stemp = datetime.datetime.now().strftime("%H_%M_%S")
+                f.write(time_stemp)
+                formatted_line = ":%s\n" % (text)
+                f.write(formatted_line)
+
             # 发布到 ROS topic
             pub.publish(text)
             parsed_queue.put(text)  # 放入解析队列
@@ -190,7 +202,7 @@ def execute_command(command):
     """
     #play music
     start_robot = ["开始","前进","出发","走っ","はしっ","進ん","進め","出発","しゅっぱつ","すすん","すすめ","スタート"]
-    stop_robot = ["停车","停止","ストップ","止まっ","とまっ","止まれ","とまれ","待っ"]
+    stop_robot = ["停车","停止","ストップ","止まっ","とまっ","止まれ","とまれ","待っ","まっ"]
     resp_cmd = ""
     if command['action'] in start_robot:
         response = voice_resp[language]["resp_start_to_run"]
