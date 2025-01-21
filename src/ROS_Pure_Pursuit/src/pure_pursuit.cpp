@@ -342,6 +342,10 @@ void PurePursuit::goal_orientation_control(const geometry_msgs::Pose& goal_pose,
         cmd_vel_.linear.x = 0.0; // Stop linear motion
         cmd_vel_.angular.z = yaw_error * 1.0; // Proportional control for orientation
         cmd_vel_.angular.z = std::min(w_max_, std::abs(cmd_vel_.angular.z));
+        if(yaw_error < 0)
+        {
+            cmd_vel_.angular.z = cmd_vel_.angular.z * (-1);
+        }
     }
     else
     {

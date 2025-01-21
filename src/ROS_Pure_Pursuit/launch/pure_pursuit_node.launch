@@ -1,7 +1,7 @@
 <launch>
         <arg name="wheel_base" default="0.5" doc="wheelbase"/>
         <arg name="lookahead_distance" default="1.0" doc="lookahead distance"/>
-        <arg name="v_max" default="0.4" doc="run velocity"/>
+        <arg name="v_max" default="0.6" doc="run velocity"/>
         <arg name="w_max" default="0.8" doc="max rotational velocity"/>
 	<arg name="position_tolerance" default="0.1" doc="position tolerance"/>
         <arg name="orientation_tolerance" default="0.1" doc="orientation tolerance"/>
