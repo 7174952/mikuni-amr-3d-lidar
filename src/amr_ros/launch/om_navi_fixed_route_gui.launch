@@ -48,14 +48,14 @@
     <param name="OBST_HIGHT_MIN_Z" value="0.0"/>
     <param name="OBST_HIGHT_MAX_Z" value="1.5"/>
     <param name="obstacle_lim" value="$(arg obstacle_lim_num)"/>
-    <param name="robot_width" value="0.52"/>
-    <param name="robot_width_tolerance" value="0.1"/>
+    <param name="robot_width_size" value="0.52"/>
 
     <param name="guide_enable" value="$(arg camera_guide_en)"/>
     <param name="idealDistance" value="2.0"/>
     <param name="stopDistance" value="4.0"/>
     <param name="kp" value="1.0"/>
-
+    <param name="threshHold" value="0.5"/>
+    <param name="guideless_distance" value="4.0"/>
     <param name="voice_ctrl_enable" value="$(arg voice_control_en)"/>
 </node>
 
