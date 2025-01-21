@@ -1,10 +1,121 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
+AudioWorker::AudioWorker(QObject *parent)
+    : QObject(parent),
+      m_player(new QMediaPlayer(this)),
+      m_playMode(SinglePlay) // 默认单次播放
+{
+    // 监听播放状态改变
+    connect(m_player, &QMediaPlayer::mediaStatusChanged,
+            this, &AudioWorker::onMediaStatusChanged);
+
+    m_stopRequested = false;
+    m_startRequested = false;
+}
+
+void AudioWorker::setPlayMode(bool is_LoopPlay)
+{
+    m_playMode = is_LoopPlay ? LoopPlay : SinglePlay;
+    // qDebug() << "[AudioWorker] setPlayMode =" << (mode == SinglePlay ? "Single" : "Loop");
+}
+
+void AudioWorker::setAudioFile(const QString &filePath)
+{
+    // 如果已经在播放，则先停止
+    if (m_player->state() == QMediaPlayer::PlayingState)
+    {
+        m_stopRequested = true;
+    }
+    // 设置新的音频文件
+    m_player->setMedia(QUrl::fromLocalFile(filePath));
+    qDebug() << "[AudioWorker] setAudioFile =" << filePath;
+}
+
+void AudioWorker::startPlaying()
+{
+    if (m_player->state() == QMediaPlayer::PlayingState)
+    {
+        //如果正在播放则设置重新播放请求
+        m_startRequested = true;
+    }
+    else
+    {
+        m_player->play();
+    }
+
+    qDebug() << "[AudioWorker] startPlaying()...";
+}
+
+void AudioWorker::stopPlaying()
+{
+    if (m_playMode == LoopPlay)
+    {
+        m_stopRequested = true;
+    }
+    else //SinglePlay
+    {
+        //等待一次播放结束
+    }
+
+    qDebug() << "[AudioWorker] stopPlaying()...";
+}
+
+void AudioWorker::onMediaStatusChanged(QMediaPlayer::MediaStatus status)
+{
+    if (status == QMediaPlayer::EndOfMedia)
+    {
+        qDebug() << "[AudioWorker] EndOfMedia.";
+
+        // 如果是循环模式，则间隔2秒后再次播放
+        if (m_playMode == LoopPlay)
+        {
+            qDebug() << "[AudioWorker] Will loop after 2 seconds.";
+
+            if(m_startRequested)
+            {
+                m_player->play();
+                m_startRequested = false;
+                return;
+            }
+
+            if(m_stopRequested)
+            {
+                emit playbackStopped();
+                m_stopRequested = false;
+            }
+            else
+            {
+                QTimer::singleShot(2000, this, [this]()
+                {
+                    m_player->play();
+                    qDebug() << "[AudioWorker] LoopPlay replay";
+                });
+            }
+        }
+        else //SinglePlay
+        {
+            if(m_startRequested)
+            {
+                m_player->play();
+                m_startRequested = false;
+            }
+            else
+            {
+                emit playbackStopped();
+                // 单次播放，不再自动重播
+                qDebug() << "[AudioWorker] SinglePlay finished. Not replaying.";
+            }
+        }
+    }
+}
+
 MainWindow::MainWindow(QWidget *parent)
-    : QWidget(parent)
-    , nh_()
-    , ui(new Ui::MainWindow)
+    : QWidget(parent),
+      nh_(),
+      m_thread(new QThread(this)),
+      m_worker(new AudioWorker),
+      ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
     execute_shell_cmd("bash ~/catkin_ws/src/amr_ros/scripts/amr_start.sh");
@@ -18,6 +129,8 @@ MainWindow::MainWindow(QWidget *parent)
     sub_navi_status  = nh_.subscribe("/navi_status",1, &MainWindow::navi_status_callback, this);
     client_request_next_target = nh_.serviceClient<std_srvs::Empty>("req_next_target");
     sub_obstacle_detect = nh_.subscribe("/obstacle_points_num",1, &MainWindow::obstacle_CallBack,this);
+    pub_odom_limit   = nh_.advertise<std_msgs::String>("/odom_limit",10);
+    sub_camera_ctrl_status = nh_.subscribe("/camera_ctrl_status",1, &MainWindow::cameraCtrl_CallBack,this);
 
     //Set 3D data file name
     RootPath = QDir::homePath();
@@ -53,7 +166,19 @@ MainWindow::MainWindow(QWidget *parent)
 
     user_map_path = ui->lineEdit_Folder_Path->text() + "/" + ui->comboBox_Sub_MapFolder->currentText();
 
-    startStop_flag = {false,false,false,false,false,false,false,false};
+    startStop_flag = {false, //is_joy_used
+                      false, //is_making_map
+                      false, //is_making_route
+                      false, //is_recording_route
+                      false, //is_navi_Startup
+                      false, //is_navi_running
+                      false, //is_essay_playing
+                      false, //is_obst_playing
+                      false, //is_navi_limit_on
+                      false,  //is_navi_next_target_on
+                      false   //is_camera_ctrl_playing
+                     };
+
     init_waypoint = {"origin", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0};
 
     navi_route_status = {"","stop","","true"};
@@ -90,11 +215,12 @@ MainWindow::MainWindow(QWidget *parent)
     ui->pushButton_Next_Target->setEnabled(false);
     if(ui->radioButton_Waypoint_First->isChecked())
     {
-        ui->spinBox_Waypoint_Wait->setValue(0);
-        ui->spinBox_Waypoint_Wait->setEnabled(false);
-        ui->spinBox_Waypoint_Angle->setValue(0);
-        ui->spinBox_Waypoint_Angle->setEnabled(false);
+        ui->comboBox_Waypoint_Wait->setCurrentIndex(0);
+        ui->comboBox_Waypoint_Wait->setEnabled(false);
+        ui->comboBox_Waypoint_angle->setCurrentIndex(0);
+        ui->comboBox_Waypoint_angle->setEnabled(false);
     }
+    ui->pushButton_Limit_Vel->setEnabled(false);
 
     //Regist navi object
     robot_cur_pose = {0,0,0,0,0,0,1};
@@ -103,20 +229,22 @@ MainWindow::MainWindow(QWidget *parent)
     last_point.resize(7);
     last_point.fill(0.0);
 
-    //Play music
-    player_bgm = new QMediaPlayer(this);
-    // 创建 QMediaPlaylist 播放列表对象
-    QMediaPlaylist *playlist = new QMediaPlaylist(this);
+    // 把 worker 移动到子线程
+    m_worker->moveToThread(m_thread);
 
-    playlist->addMedia(QUrl::fromLocalFile(RootPath + "/catkin_ws/src/amr_ros/resource/robot_navi_bgm.mp3"));
-    // 设置播放模式为循环播放
-    playlist->setPlaybackMode(QMediaPlaylist::Loop);
-    // 将播放列表设置为播放器的播放源
-    player_bgm->setPlaylist(playlist);
-    player_bgm->setVolume(15);
+    // 关键：监听子线程发出的 “playbackStopped” 信号
+    connect(m_worker, &AudioWorker::playbackStopped, this, &MainWindow::onPlaybackStopped);
 
-    greet_player = new QMediaPlayer(this);
-    obst_player = new QMediaPlayer(this);
+    is_waiting_obst_play = false;
+    is_waiting_camera_play = false;
+
+    //debug_ryu
+    if (!m_thread->isRunning())
+    {
+        m_thread->start();
+    }
+
+    is_start_init_pose = false;
 
 }
 
@@ -132,6 +260,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
     //kill self GUI process
     ros::shutdown();
+    audio_cleanup();
 
     //terminate all ros node
     if(ros_process.size() > 0)
@@ -146,6 +275,32 @@ void MainWindow::closeEvent(QCloseEvent *event)
     execute_shell_cmd("pkill -f rosmaster");
 
     event->accept();
+}
+
+// 程序退出或窗口关闭时，安全结束线程
+void MainWindow::audio_cleanup()
+{
+    if (m_thread->isRunning()) {
+        // 1. 先让工作者停止播放
+        QMetaObject::invokeMethod(m_worker, "stopPlaying", Qt::QueuedConnection);
+        // 2. 通知线程结束事件循环
+        m_thread->quit();
+        // 3. 等待线程结束
+        m_thread->wait();
+    }
+}
+
+// 具体实现这个槽函数
+void MainWindow::onPlaybackStopped()
+{
+    qDebug() << "[Widget] Received playbackStopped signal!";
+
+    if(startStop_flag.is_essay_playing)
+    {
+        std_msgs::String voice_mode;
+        voice_mode.data = "chat";
+        pub_voice_mode.publish(voice_mode);
+    }
 }
 
 void MainWindow::writeSettings()
@@ -256,23 +411,33 @@ void MainWindow::initStartupLocation()
 
 void MainWindow::obstacle_CallBack(const std_msgs::Int32::ConstPtr& msg)
 {
+    //debug_ryu
+    static uint cnt = 0;
+
+    if(is_waiting_obst_play)
+        return;
+
     if((msg->data > OBSTACLE_LIM_NUM) && (navi_route_status.robot_state == "running"))
     {
         if(startStop_flag.is_obst_playing == false)
         {
-            if(ui->checkBox_With_Mic->isChecked() == false || ui->checkBox_Voice_Control_En->isChecked() == false)
-            {
-                player_bgm->stop();
-            }
-            //greet for finished
-            QMediaPlaylist *playlist = new QMediaPlaylist(this);
-            playlist->addMedia(QUrl::fromLocalFile(RootPath + "/catkin_ws/src/amr_ros/resource/obstacle_alert_" + user_language[ui->comboBox_language->currentText()] + ".mp3"));
-            // 设置播放模式为循环播放
-            playlist->setPlaybackMode(QMediaPlaylist::Loop);
-            // 将播放列表设置为播放器的播放源
-            obst_player->setPlaylist(playlist);
-            obst_player->play();
             startStop_flag.is_obst_playing = true;
+            is_waiting_obst_play = true;
+
+            //alert
+            QString alert_name = is_open_door ? "/catkin_ws/src/amr_ros/resource/open_door_" : "/catkin_ws/src/amr_ros/resource/obstacle_alert_";
+            audio_name = RootPath + alert_name + user_language[ui->comboBox_language->currentText()] + ".mp3";
+
+            QMetaObject::invokeMethod(m_worker, "setAudioFile", Qt::QueuedConnection, Q_ARG(QString, audio_name));
+            QMetaObject::invokeMethod(m_worker, "setPlayMode", Qt::QueuedConnection, Q_ARG(bool, true));
+            // If already running, directly ask the worker to play
+            QMetaObject::invokeMethod(m_worker, "startPlaying", Qt::QueuedConnection);
+
+            QTimer::singleShot(4000, this, [this]()
+            {
+                is_waiting_obst_play  = false; //can change status
+            });
+
         }
 
     }
@@ -280,31 +445,82 @@ void MainWindow::obstacle_CallBack(const std_msgs::Int32::ConstPtr& msg)
     {
         if(startStop_flag.is_obst_playing == true)
         {
-            obst_player->stop();
+            QMetaObject::invokeMethod(m_worker, "stopPlaying", Qt::QueuedConnection);
         }
         startStop_flag.is_obst_playing = false;
 
-        //replay bgm
-        if(    (startStop_flag.is_navi_Startup == true)
-            && (startStop_flag.is_navi_running == true)
-            && (navi_route_status.robot_state == "running"))
+    }
+}
+
+void MainWindow::cameraCtrl_CallBack(const std_msgs::String::ConstPtr& msg)
+{
+    static uint obst_cnt = 0;
+    if((ui->checkBox_With_Camera->isChecked() == false) || (ui->checkBox_Guide_Enable->isChecked() == false))
+    {
+        return;
+    }
+
+    QStringList camera_msg = QString::fromStdString(msg->data).split(";");
+    if(camera_msg.size() < 2)
+    {
+        return;
+    }
+
+    if(is_waiting_camera_play)
+        return;
+
+    camera_ctrl_status.person_num = camera_msg.at(0).split(":").at(1).toUInt();
+    camera_ctrl_status.run_status = (camera_msg.at(1).split(":").at(1) == "1");
+
+    if(camera_ctrl_status.run_status == false)
+    {
+        if(startStop_flag.is_camera_ctrl_playing == false )
         {
-            if(ui->checkBox_With_Mic->isChecked() == false || ui->checkBox_Voice_Control_En->isChecked() == false)
+            startStop_flag.is_camera_ctrl_playing = true;
+            is_waiting_camera_play = true; //start to keep status
+
+            //call guest to speed up
+            audio_name = RootPath + "/catkin_ws/src/amr_ros/resource/tell_speed_up_" + user_language[ui->comboBox_language->currentText()] + ".mp3";
+
+            QMetaObject::invokeMethod(m_worker, "setAudioFile", Qt::QueuedConnection, Q_ARG(QString, audio_name));
+            QMetaObject::invokeMethod(m_worker, "setPlayMode", Qt::QueuedConnection, Q_ARG(bool, true));
+            // If already running, directly ask the worker to play
+            QMetaObject::invokeMethod(m_worker, "startPlaying", Qt::QueuedConnection);
+
+            QTimer::singleShot(2000, this, [this]()
             {
-                player_bgm->play();
-            }
+                is_waiting_camera_play  = false; //can change status
+            });
         }
 
     }
+    else
+    {
+        if(startStop_flag.is_camera_ctrl_playing == true)
+        {
+            QMetaObject::invokeMethod(m_worker, "stopPlaying", Qt::QueuedConnection);
+            startStop_flag.is_camera_ctrl_playing = false;
+
+        }
+
+    }
+
+
 }
 
 void MainWindow::navi_status_callback(const std_msgs::String::ConstPtr& msg)
 {
     QStringList status_list = QString::fromStdString(msg->data).split(";");
-    navi_route_status.sub_route = status_list.at(0);        // A-B-C
+    if(status_list.size() < 7)
+        return;
+
+    navi_route_status.sub_route = status_list.at(0);        // name:A-B-C
     navi_route_status.robot_state = status_list.at(1);      // start/stop/running
-    navi_route_status.current_location = status_list.at(2); // A/B/C/A-B-C
+    navi_route_status.current_location = status_list.at(2); // A/B/C/A-B/B-C
     navi_route_status.route_finished = status_list.at(3);   // "false", "true"
+    navi_route_status.is_auto_pass = status_list.at(4);     // "false", "true"
+    navi_route_status.is_front_careless = status_list.at(5); // "false", "true"
+    navi_route_status.is_end_careless = status_list.at(6);   // "false", "true"
 
     std_msgs::String voice_mode;
     if(navi_route_status.robot_state == "start")
@@ -316,35 +532,30 @@ void MainWindow::navi_status_callback(const std_msgs::String::ConstPtr& msg)
         else
         {
             voice_mode.data = "off";
-            player_bgm->play();
         }
         pub_voice_mode.publish(voice_mode);
         ui->pushButton_Next_Target->setEnabled(false);
         startStop_flag.is_essay_playing = false;
+        startStop_flag.is_navi_next_target_on = true;
+        odom_distance = 0.0;
     }
     else if(navi_route_status.robot_state == "stop")
     {
-        player_bgm->stop();
-
-        if(startStop_flag.is_essay_playing == false && location_essay.contains(navi_route_status.current_location))
+        if(    (navi_route_status.sub_route != "")
+            && (startStop_flag.is_essay_playing == false)
+            && (location_essay.contains(navi_route_status.current_location)))
         {
             startStop_flag.is_essay_playing = true;
+
             //essay for target location arrived
-            //greet for finished
-            greet_player->setMedia(QUrl::fromLocalFile(location_essay.value(navi_route_status.current_location) + "/"
-                                                     + location_essay.value(navi_route_status.current_location).split("/").last() + "_"
-                                                     + user_language[ui->comboBox_language->currentText()] + ".mp3"));
-            greet_player->play();
-            // 连接信号到槽函数
-            connect(greet_player, &QMediaPlayer::mediaStatusChanged, this, [=](QMediaPlayer::MediaStatus status)
-            {
-                if (status == QMediaPlayer::EndOfMedia)
-                {
-                    std_msgs::String voice_mode;
-                    voice_mode.data = "chat";
-                    pub_voice_mode.publish(voice_mode);
-                }
-            });
+            audio_name = location_essay.value(navi_route_status.current_location) + "/"
+                        + location_essay.value(navi_route_status.current_location).split("/").last() + "_"
+                        + user_language[ui->comboBox_language->currentText()] + ".mp3";
+            QMetaObject::invokeMethod(m_worker, "setAudioFile", Qt::QueuedConnection, Q_ARG(QString, audio_name));
+            QMetaObject::invokeMethod(m_worker, "setPlayMode", Qt::QueuedConnection, Q_ARG(bool, false));
+            // If already running, directly ask the worker to play
+            QMetaObject::invokeMethod(m_worker, "startPlaying", Qt::QueuedConnection);
+
         }
         else
         {
@@ -355,6 +566,8 @@ void MainWindow::navi_status_callback(const std_msgs::String::ConstPtr& msg)
         if((ui->checkBox_Route_Auto_Next->isChecked() == false) && (navi_route_status.route_finished == "false"))
         {
             ui->pushButton_Next_Target->setEnabled(true);
+            if(!navi_route_status.sub_route.isEmpty())
+                startStop_flag.is_navi_next_target_on = false;
         }
 
         //Auto completed all process
@@ -374,7 +587,10 @@ void MainWindow::navi_status_callback(const std_msgs::String::ConstPtr& msg)
     }
     else //state=="running"
     {
-        //Do nothing
+        if(navi_route_status.is_auto_pass == "true")
+        {
+            odom_distance = 0.0;
+        }
     }
 
 }
@@ -391,11 +607,13 @@ void MainWindow::Odometry_CallBack(const nav_msgs::Odometry& odom)
     robot_cur_pose.ori_w = odom.pose.pose.orientation.w;
 
     //save current pose to route file
-    if(startStop_flag.is_recording_route == true)
+    if( (startStop_flag.is_recording_route == true)
+        || (startStop_flag.is_navi_next_target_on == true))
     {
         double distance = std::sqrt(  std::pow(last_point[0] - robot_cur_pose.pos_x, 2)
                                     + std::pow(last_point[1] - robot_cur_pose.pos_y, 2)
                                     + std::pow(last_point[2] - robot_cur_pose.pos_z, 2));
+
         const double waypoint_interval = 0.25;
 
         if (distance >= waypoint_interval)
@@ -408,20 +626,67 @@ void MainWindow::Odometry_CallBack(const nav_msgs::Odometry& odom)
             last_point[5] = robot_cur_pose.ori_z;
             last_point[6] = robot_cur_pose.ori_w;
 
-            QString record_tmp;
-
-            for(uint i = 0; i < last_point.size(); i++)
+            if(startStop_flag.is_recording_route == true)
             {
-                record_tmp.append(QString::number(last_point.at(i)));
-                if(i < last_point.size() - 1)
+                QString record_tmp;
+
+                for(uint i = 0; i < last_point.size(); i++)
                 {
-                    record_tmp.append(",");
+                    record_tmp.append(QString::number(last_point.at(i)));
+                    if(i < last_point.size() - 1)
+                    {
+                        record_tmp.append(",");
+                    }
                 }
+                //save record to buffer
+                route_list_record.push_back(record_tmp);
+                route_distance += distance;
             }
-            //save record to buffer
-            route_list_record.push_back(record_tmp);
-            route_distance += distance;
+
+            //used for navigating limit: calculate odom
+            if(startStop_flag.is_navi_next_target_on == true)
+            {
+                odom_distance += distance;
+            }
+        } 
+    }
+
+    if(startStop_flag.is_navi_next_target_on == true)
+    {
+        //check limit condition
+        if(base_route_info.contains(navi_route_status.sub_route) == false)
+            return;
+
+        Odom_Limit_Status odom_limit_status;
+        odom_limit_status.clear();
+        odom_limit_status.odom_distance = odom_distance;
+        odom_limit_status.total_distance = base_route_info[navi_route_status.sub_route].total_distance;
+        odom_limit_status.limit_on = false;
+        odom_limit_status.max_vel = 0.0;
+        odom_limit_status.obst_tolerance = 0.0;
+
+        for(auto it = base_route_info[navi_route_status.sub_route].limit_list.begin(); it != base_route_info[navi_route_status.sub_route].limit_list.end(); it++)
+        {
+            if((it.key().limit_from < odom_distance) && (odom_distance < it.key().limit_to))
+            {
+                odom_limit_status.limit_on = true;
+                odom_limit_status.max_vel = it.value().max_vel;
+                odom_limit_status.obst_tolerance = it.value().obst_tolerance;
+                break;
+            }
         }
+        is_open_door = (odom_limit_status.limit_on && odom_limit_status.obst_tolerance < 0.1) ? true:false;
+
+        std_msgs::String odom_limit_msg;
+        odom_limit_msg.data = "odom_distance:" + QString::number(odom_limit_status.odom_distance,'f',2).toStdString() + ";"
+                            + "total_distance:" + QString::number(odom_limit_status.total_distance,'f',2).toStdString() + ";"
+                            + "limit_on:" + QString::number(odom_limit_status.limit_on).toStdString() + ";"
+                            + "max_vel:" + QString::number(odom_limit_status.max_vel,'f',2).toStdString() + ";"
+                            + "obst_tolerance:"  + QString::number(odom_limit_status.obst_tolerance,'f',2).toStdString() + ";"
+                            + "is_front_careless:" + (navi_route_status.is_front_careless == "true" ? "1" : "0") + ";"
+                            + "is_end_careless:" + (navi_route_status.is_end_careless == "true" ? "1" : "0");
+
+        pub_odom_limit.publish(odom_limit_msg);
     }
 }
 
@@ -723,6 +988,8 @@ void MainWindow::on_pushButton_Route_Startup_clicked()
         ui->pushButton_Navi_StartUp->setEnabled(false);
         ui->pushButton_Route_Record->setEnabled(true);
 
+        is_start_init_pose = false;
+
     }
     else //stop make route
     {
@@ -748,6 +1015,13 @@ void MainWindow::on_pushButton_Route_Record_clicked()
 {
     if(startStop_flag.is_recording_route == false)
     {
+        //reset init position
+        if(is_start_init_pose)
+        {
+            is_start_init_pose = false;
+            initRobotCoorinate();
+        }
+
         //Check if FROM not equal TO.
         if(ui->comboBox_Route_From->currentText() == ui->comboBox_Route_To->currentText())
         {
@@ -774,8 +1048,15 @@ void MainWindow::on_pushButton_Route_Record_clicked()
         route_list_record.clear();
         route_distance = 0.0;
         startStop_flag.is_recording_route = true;
+        limit_key.id = 0;
+        limit_key.limit_from = 0.0;
+        limit_key.limit_to = 0.0;
+
+        base_route_navi_limit.total_distance = 0;
+        base_route_navi_limit.limit_list.clear();
 
         ui->pushButton_Route_Record->setText("Finish Record");
+        ui->pushButton_Limit_Vel->setEnabled(true);
     }
     else //startStop_flag.is_recording_route == true
     {
@@ -833,39 +1114,82 @@ void MainWindow::on_pushButton_Route_Record_clicked()
         if(file_route.exists())
         {
             //check route, if not exist then addin
-            if(!file_route.open(QIODevice::ReadWrite | QIODevice::Text))
+            if(!file_route.open(QIODevice::ReadOnly | QIODevice::Text))
             {
-                QMessageBox::warning(this,"Warnig","Update base_route_info.txt failed!");
+                QMessageBox::warning(this,"Warnig","Update(add new) base_route_info.txt failed!");
                 return;
             }
-            QTextStream data_inout(&file_route);
-            bool is_route_exist = false;
-            while(!data_inout.atEnd())
+            QTextStream data_in(&file_route);
+            QStringList route_list;
+            while(!data_in.atEnd())
             {
-                QString line = data_inout.readLine().trimmed().split(":").at(0);
-                if((line == route_name1) || (line == route_name2))
+                QString line = data_in.readLine();
+                QString name_str = line.trimmed().split(":").at(0);
+                if((name_str != route_name1) && (name_str != route_name2))
                 {
-                    is_route_exist = true;
+                    route_list.append(line);
                 }
             }
-            //add new route
-            if(is_route_exist == false)
+            file_route.close();
+
+            //save base route info with limit info : A->B
+            QString info_str1 = route_name1 + ":" + QString::number(route_distance,'f',2) + ";";
+            for(auto it = base_route_navi_limit.limit_list.begin(); it != base_route_navi_limit.limit_list.end(); it++)
             {
-                data_inout << route_name1 << ":" << (uint)route_distance << "\n";
-                data_inout << route_name2 << ":" << (uint)route_distance << "\n";
+                info_str1 += QString::number(it.key().limit_from,'f', 2) + "-" + QString::number(it.key().limit_to,'f',2) + ":"
+                            + QString::number(it.key().id) + "," + QString::number(it.value().max_vel,'f',2) + "," + QString::number(it.value().obst_tolerance,'f',2) + ";";
             }
+            route_list.append(info_str1);
+            //B->A
+            uint id_num = 0;
+            QString info_str2 = route_name2 + ":" + QString::number(route_distance,'f',2) + ";";
+            for(auto it = base_route_navi_limit.limit_list.end(); it != base_route_navi_limit.limit_list.begin(); )
+            {
+                --it;
+                info_str2 += QString::number(route_distance - it.key().limit_to,'f', 2) + "-" + QString::number(route_distance - it.key().limit_from,'f',2) + ":"
+                            + QString::number(++id_num) + "," + QString::number(it.value().max_vel,'f',2) + "," + QString::number(it.value().obst_tolerance,'f',2) + ";";
+            }
+            route_list.append(info_str2);
+
+            if(!file_route.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
+            {
+                QMessageBox::warning(this,"Warnig","Update(create) base_route_info.txt failed!");
+                return;
+            }
+            //add new route
+            QTextStream data_out(&file_route);
+            for(const QString str : route_list)
+                data_out << str << "\n";
+
             file_route.close();
         }
         else //create file
         {
-            if(!file_route.open(QIODevice::WriteOnly | QIODevice::Text))
+            if(!file_route.open(QIODevice::NewOnly | QIODevice::Text))
             {
                 QMessageBox::warning(this,"Warnig","Create base_route_info.txt failed!");
                 return;
             }
             QTextStream data_out(&file_route);
-            data_out << route_name1 << ":" << (uint)route_distance << "\n";
-            data_out << route_name2 << ":" << (uint)route_distance << "\n";
+
+            //save base route info with limit info : A->B
+            QString info_str = route_name1 + ":" + QString::number(route_distance,'f',2) + ";";
+            for(auto it = base_route_navi_limit.limit_list.begin(); it != base_route_navi_limit.limit_list.end(); it++)
+            {
+                info_str += QString::number(it.key().limit_from,'f', 2) + "-" + QString::number(it.key().limit_to,'f',2) + ":"
+                            + QString::number(it.key().id) + "," + QString::number(it.value().max_vel,'f',2) + "," + QString::number(it.value().obst_tolerance,'f',2) + ";";
+            }
+            data_out << info_str << "\n";
+            //B->A
+            uint id_num = 0;
+            info_str = route_name2 + ":" + QString::number(route_distance,'f',2) + ";";
+            for(auto it = base_route_navi_limit.limit_list.end(); it != base_route_navi_limit.limit_list.begin(); )
+            {
+                --it;
+                info_str += QString::number(route_distance - it.key().limit_to,'f', 2) + "-" + QString::number(route_distance - it.key().limit_from,'f',2) + ":"
+                            + QString::number(++id_num) + "," + QString::number(it.value().max_vel,'f',2) + "," + QString::number(it.value().obst_tolerance,'f',2) + ";";
+            }
+            data_out << info_str << "\n";
             file_route.close();
         }
 
@@ -923,6 +1247,7 @@ void MainWindow::on_pushButton_Route_Record_clicked()
         file_reverse.close();
 
         ui->pushButton_Route_Record->setText("Start Record");
+        ui->pushButton_Limit_Vel->setEnabled(false);
     }
 }
 
@@ -941,6 +1266,52 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
     //startup navigation node
     if(startStop_flag.is_navi_Startup == false)
     {
+        //check base_route_info
+        file_name = user_map_path + "/base_route_info.txt";
+        if(!QFile::exists(file_name))
+        {
+            QMessageBox::warning(this,"Warning","base_route_info.txt is not exist. Please make route first!");
+            return;
+        }
+
+        base_route_info.clear();
+        //Upload base route infomation
+        QFile route_file(file_name);
+        if(route_file.open(QIODevice::ReadOnly | QIODevice::Text))
+        {
+            QTextStream data_in(&route_file);
+            while(!data_in.atEnd())
+            {
+                base_route_navi_limit.total_distance = 0;
+                base_route_navi_limit.limit_list.clear();
+
+                QStringList line_in_list = data_in.readLine().trimmed().split(";");
+                QString info_str = line_in_list.takeFirst();
+                QString sub_route = info_str.split(":").at(0);
+                base_route_navi_limit.total_distance = info_str.split(":").at(1).toDouble();
+
+                for(const QString limit_str : line_in_list)
+                {
+                    if(limit_str == "")
+                        break;
+                    QStringList dist_from_to = limit_str.split(":").at(0).split("-");
+                    QStringList limit_value = limit_str.split(":").at(1).split(",");
+                    LimitKey key;
+                    LimitValue value;
+                    key.limit_from = dist_from_to.at(0).toDouble();
+                    key.limit_to = dist_from_to.at(1).toDouble();
+                    key.id = limit_value.at(0).toUInt();
+
+                    value.max_vel = limit_value.at(1).toDouble();
+                    value.obst_tolerance = limit_value.at(2).toDouble();
+                    base_route_navi_limit.limit_list.insert(key,value);
+                }
+                base_route_info.insert(sub_route,base_route_navi_limit);
+            }
+
+            route_file.close();
+        }
+
         //find robot current location
         if(getStartupCordinate() == false)
         {
@@ -988,7 +1359,6 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
         //startup voice control module
         if(ui->checkBox_With_Mic->isChecked())
         {
-#if 0 //debug_ryu
             if(launchNaviVoiceCtrlEnvProcess->state() == QProcess::NotRunning)
             {
                 QString command = QString("bash -c \"source ~/myenv3.9/bin/activate && roslaunch amr_ros om_navi_voice_control.launch voice_lang:=%1\"")
@@ -996,7 +1366,6 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
 
                 start_process(launchNaviVoiceCtrlEnvProcess, command);
             }
-#endif
         }
         ui->pushButton_Navi_StartUp->setText("Finish Navigation");
 
@@ -1030,19 +1399,18 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
             QMessageBox::warning(this,"Warning","Open essay_voice_setup.txt failed! But continue to run!");
         }
 
-        //greet for startup
-        greet_player->setMedia(QUrl::fromLocalFile(RootPath + "/catkin_ws/src/amr_ros/resource/greet_startup_navi_" + user_language[ui->comboBox_language->currentText()] + ".mp3"));
-        greet_player->play();
-
+        is_waiting_camera_play = false;
+        is_waiting_obst_play = false;
+        start_guide = true;
+        is_start_init_pose = true;
     }
     else
     {
-        player_bgm->stop();
-        obst_player->stop();
         //greet for finished
-        greet_player->setMedia(QUrl::fromLocalFile(RootPath + "/catkin_ws/src/amr_ros/resource/greet_finish_navi_"+user_language[ui->comboBox_language->currentText()]+".mp3"));
-        greet_player->play();
-
+        audio_name = RootPath + "/catkin_ws/src/amr_ros/resource/greet_finish_navi_" + user_language[ui->comboBox_language->currentText()] + ".mp3";
+        QMetaObject::invokeMethod(m_worker, "setAudioFile", Qt::QueuedConnection, Q_ARG(QString, audio_name));
+        QMetaObject::invokeMethod(m_worker, "setPlayMode", Qt::QueuedConnection, Q_ARG(bool, false));
+        QMetaObject::invokeMethod(m_worker, "startPlaying", Qt::QueuedConnection);
 
         //terminate camera process
         if(ui->checkBox_With_Camera->isChecked())
@@ -1052,9 +1420,7 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
         //terminate voice/mic process
         if(ui->checkBox_With_Mic->isChecked())
         {
-#if 0 //debug_ryu
             terminate_process(launchNaviVoiceCtrlEnvProcess);
-#endif
         }
         terminate_process(launchNaviProcess);
 
@@ -1069,6 +1435,7 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
         ui->pushButton_Navi_Script_Clear->setEnabled(false);
         ui->pushButton_Waypoint_Add->setEnabled(false);
         ui->pushButton_Navi_Run->setEnabled(false);
+
 
     }
 
@@ -1097,8 +1464,8 @@ void MainWindow::on_pushButton_Waypoint_Add_clicked()
         //save selected waypoint infomation
         Navi_Waypoint_info info;
         info.waypoint_name = ui->comboBox_waypoint_list->currentText();
-        info.delt_angle = ui->spinBox_Waypoint_Angle->value();
-        info.wait_time = ui->spinBox_Waypoint_Wait->value();
+        info.delt_angle = ui->comboBox_Waypoint_angle->currentText().toInt();
+        info.wait_time = ui->comboBox_Waypoint_Wait->currentText().toInt();
         navi_route_list.push_back(info);
     }
     else
@@ -1113,6 +1480,13 @@ void MainWindow::on_pushButton_Navi_Run_clicked()
 {
     if(startStop_flag.is_navi_running == false)
     {
+        //reset init position
+        if(is_start_init_pose)
+        {
+            is_start_init_pose = false;
+            initRobotCoorinate();
+        }
+
         //Startup load waypoints nodes
         if(launchNaviLoadRouteProcess->state() == QProcess::NotRunning)
         {
@@ -1133,14 +1507,15 @@ void MainWindow::on_pushButton_Navi_Run_clicked()
         terminate_process(launchNaviLoadRouteProcess);
         startStop_flag.is_navi_running = false;
         ui->pushButton_Navi_Run->setText("RUN");
+        startStop_flag.is_navi_next_target_on = false;
 
         ui->pushButton_Waypoint_Add->setEnabled(true);
         ui->pushButton_Navi_Load_Script->setEnabled(true);
         ui->pushButton_Navi_Save_Script->setEnabled(true);
         ui->pushButton_Navi_Script_Clear->setEnabled(true);
         ui->checkBox_Route_Auto_Next->setEnabled(true);
-        obst_player->stop();
-        player_bgm->stop();
+        QMetaObject::invokeMethod(m_worker, "stopPlaying", Qt::QueuedConnection);
+
     }
 
 }
@@ -1313,12 +1688,28 @@ void MainWindow::on_comboBox_Sub_MapFolder_currentTextChanged(const QString &arg
 
 void MainWindow::on_pushButton_Next_Target_clicked()
 {
+
+    std_msgs::String voice_mode;
+    voice_mode.data = "control";
+    pub_voice_mode.publish(voice_mode);
+    QThread::msleep(100);
+
+    //go to next target
+    audio_name = RootPath + "/catkin_ws/src/amr_ros/resource/goto_next_target_" + user_language[ui->comboBox_language->currentText()] + ".mp3";
+    if(start_guide)
+    {
+        start_guide = false;
+        audio_name = RootPath + "/catkin_ws/src/amr_ros/resource/greet_startup_navi_" + user_language[ui->comboBox_language->currentText()] + ".mp3";
+    }
+    QMetaObject::invokeMethod(m_worker, "setAudioFile", Qt::QueuedConnection, Q_ARG(QString, audio_name));
+    QMetaObject::invokeMethod(m_worker, "setPlayMode", Qt::QueuedConnection, Q_ARG(bool, false));
+    QMetaObject::invokeMethod(m_worker, "startPlaying", Qt::QueuedConnection);
+
     // request:pure_pursuit to reset path
     std_srvs::Empty srv;
     if(client_request_next_target.call(srv))
     {
         ROS_INFO("load_waypoint: Reset path succeeded.");
-        qDebug() << "Request to next target is successful.";
     }
     else
     {
@@ -1435,30 +1826,29 @@ void MainWindow::on_pushButton_Save_Location_Essay_clicked()
 
 void MainWindow::on_radioButton_Waypoint_Final_clicked()
 {
-    ui->spinBox_Waypoint_Wait->setValue(-1);
-    ui->spinBox_Waypoint_Wait->setEnabled(false);
-    ui->spinBox_Waypoint_Angle->setEnabled(true);
+    ui->comboBox_Waypoint_Wait->setCurrentIndex(2);
+    ui->comboBox_Waypoint_Wait->setEnabled(false);
+    ui->comboBox_Waypoint_angle->setEnabled(true);
 }
 
 
 void MainWindow::on_radioButton_Waypoint_First_clicked()
 {
-    ui->spinBox_Waypoint_Wait->setValue(0);
-    ui->spinBox_Waypoint_Wait->setEnabled(false);
-    ui->spinBox_Waypoint_Angle->setValue(0);
-    ui->spinBox_Waypoint_Angle->setEnabled(false);
+    ui->comboBox_Waypoint_Wait->setCurrentIndex(0);
+    ui->comboBox_Waypoint_Wait->setEnabled(false);
+    ui->comboBox_Waypoint_angle->setCurrentIndex(0);
+    ui->comboBox_Waypoint_angle->setEnabled(false);
 }
 
 
 void MainWindow::on_radioButton_Waypoint_Middle_clicked()
 {
-    ui->spinBox_Waypoint_Wait->setValue(0);
-    ui->spinBox_Waypoint_Wait->setEnabled(true);
-    ui->spinBox_Waypoint_Angle->setEnabled(true);
+    ui->comboBox_Waypoint_Wait->setCurrentIndex(1);
+    ui->comboBox_Waypoint_Wait->setEnabled(true);
+    ui->comboBox_Waypoint_angle->setEnabled(true);
 }
 
-
-void MainWindow::on_pushButton_Init_Robot_Pose_clicked()
+void MainWindow::initRobotCoorinate()
 {
     init_waypoint = {"origin", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0};
     getStartupCordinate();
@@ -1475,7 +1865,43 @@ void MainWindow::on_pushButton_Init_Robot_Pose_clicked()
             + " init_ori_w:=" + QString::number(init_waypoint.pose.ori_w));
 
     init_robot_pose_process->waitForFinished(10000);
+    QThread::msleep(1000);
 
+}
+
+void MainWindow::on_pushButton_Init_Robot_Pose_clicked()
+{
+    //reset init position
+    if(is_start_init_pose)
+    {
+        initRobotCoorinate();
+        is_start_init_pose = false;
+    }
+}
+
+
+void MainWindow::on_pushButton_Limit_Vel_clicked()
+{
+    if(startStop_flag.is_navi_limit_on == false)
+    {
+        ui->pushButton_Limit_Vel->setText("Click to OFF");
+        startStop_flag.is_navi_limit_on = true;
+        limit_key.id++;
+        limit_key.limit_from = route_distance;
+     }
+    else
+    {
+        ui->pushButton_Limit_Vel->setText("Click to Limit ON");
+        startStop_flag.is_navi_limit_on = false;
+        limit_key.limit_to = route_distance;
+        LimitValue limit_value;
+        limit_value.max_vel = ui->comboBox_Limit_Vel->currentText().toDouble();
+        limit_value.obst_tolerance = ui->comboBox_Obst_Tolerance->currentText().toDouble();
+        base_route_navi_limit.limit_list.insert(limit_key, limit_value);
+
+        limit_key.limit_from = 0;
+        limit_key.limit_to = 0;
+    }
 
 }
 
