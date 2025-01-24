@@ -26,6 +26,11 @@
 <!--cmd_vel topic-->
 <arg name="cmd_vel" default="cmd_vel"/>
 
+<!--max vel-->
+<arg name="max_line_vel" default="0.6"/>
+<arg name="max_w_vel" default="0.8"/>
+<arg name="lookahead_dist" default="1.0"/>
+
 <!--map server-->
 <node pkg="map_server" type="map_server" name="map_server" args="$(find amr_ros)/maps/$(arg static_map)/$(arg static_map).yaml"/>
 
@@ -41,7 +46,11 @@
 </include>
 
 <!--trajectry -->
-<include file="$(find pure_pursuit)/launch/pure_pursuit_node.launch" />
+<include file="$(find pure_pursuit)/launch/pure_pursuit_node.launch" >
+    <arg name="v_max" value="$(arg max_line_vel)"/>
+    <arg name="w_max" value="$(arg max_w_vel)"/>
+    <arg name="lookahead_distance" value="$(arg lookahead_dist)"/>
+</include>
 
 <!--detection obstacle on route -->
 <node name="detect_obstacle_point" pkg="amr_ros" type="detect_obstacle_point" output="screen">
@@ -52,7 +61,7 @@
 
     <param name="guide_enable" value="$(arg camera_guide_en)"/>
     <param name="idealDistance" value="2.0"/>
-    <param name="stopDistance" value="4.0"/>
+    <param name="stopDistance" value="3.5"/>
     <param name="kp" value="1.0"/>
     <param name="threshHold" value="0.5"/>
     <param name="guideless_distance" value="4.0"/>
