@@ -86,7 +86,7 @@ void AudioWorker::onMediaStatusChanged(QMediaPlayer::MediaStatus status)
             }
             else
             {
-                QTimer::singleShot(2000, this, [this]()
+                QTimer::singleShot(4000, this, [this]()
                 {
                     m_player->play();
                     qDebug() << "[AudioWorker] LoopPlay replay";
@@ -317,6 +317,10 @@ void MainWindow::writeSettings()
      settings.setValue("WithMic", ui->checkBox_With_Mic->isChecked());
      settings.setValue("ControlEnable", ui->checkBox_Voice_Control_En->isChecked());
      settings.setValue("userLanguage", ui->comboBox_language->currentText());
+     settings.setValue("MaxVel", ui->comboBox_Max_Vel->currentText());
+     settings.setValue("MaxWVel", ui->comboBox_Max_Vel_2->currentText());
+     settings.setValue("LookAhead", ui->comboBox_Max_Vel_3->currentText());
+
 
 }
 
@@ -340,6 +344,9 @@ void MainWindow::readSettings()
     for(const QString str : user_language.keys())
         ui->comboBox_language->addItem(str);
     ui->comboBox_language->setCurrentText(settings.value("userLanguage","English").toString());
+    ui->comboBox_Max_Vel->setCurrentText(settings.value("MaxVel", "0.6").toString());
+    ui->comboBox_Max_Vel_2->setCurrentText(settings.value("MaxWVel", "0.8").toString());
+    ui->comboBox_Max_Vel_3->setCurrentText(settings.value("LookAhead", "1.0").toString());
 
 }
 void MainWindow::initWaypoints()
@@ -411,9 +418,6 @@ void MainWindow::initStartupLocation()
 
 void MainWindow::obstacle_CallBack(const std_msgs::Int32::ConstPtr& msg)
 {
-    //debug_ryu
-    static uint cnt = 0;
-
     if(is_waiting_obst_play)
         return;
 
@@ -675,7 +679,7 @@ void MainWindow::Odometry_CallBack(const nav_msgs::Odometry& odom)
                 break;
             }
         }
-        is_open_door = (odom_limit_status.limit_on && odom_limit_status.obst_tolerance < 0.1) ? true:false;
+        is_open_door = (odom_limit_status.limit_on && odom_limit_status.obst_tolerance < 0.03) ? true:false;
 
         std_msgs::String odom_limit_msg;
         odom_limit_msg.data = "odom_distance:" + QString::number(odom_limit_status.odom_distance,'f',2).toStdString() + ";"
@@ -687,6 +691,11 @@ void MainWindow::Odometry_CallBack(const nav_msgs::Odometry& odom)
                             + "is_end_careless:" + (navi_route_status.is_end_careless == "true" ? "1" : "0");
 
         pub_odom_limit.publish(odom_limit_msg);
+
+        //debug_ryu,20250123
+        ui->textEdit_debug_info->setText("Navi Route:" + navi_route_status.sub_route);
+        ui->textEdit_debug_info->append("Total distance(m):" + QString::number(odom_limit_status.total_distance,'f',2));
+        ui->textEdit_debug_info->append("current distance(m):" + QString::number(odom_limit_status.odom_distance,'f',2));
     }
 }
 
@@ -988,7 +997,7 @@ void MainWindow::on_pushButton_Route_Startup_clicked()
         ui->pushButton_Navi_StartUp->setEnabled(false);
         ui->pushButton_Route_Record->setEnabled(true);
 
-        is_start_init_pose = false;
+        is_start_init_pose = true;
 
     }
     else //stop make route
@@ -1047,6 +1056,15 @@ void MainWindow::on_pushButton_Route_Record_clicked()
 
         route_list_record.clear();
         route_distance = 0.0;
+        //init to calculate distance
+        last_point[0] = robot_cur_pose.pos_x;
+        last_point[1] = robot_cur_pose.pos_y;
+        last_point[2] = robot_cur_pose.pos_z;
+        last_point[3] = robot_cur_pose.ori_x;
+        last_point[4] = robot_cur_pose.ori_y;
+        last_point[5] = robot_cur_pose.ori_z;
+        last_point[6] = robot_cur_pose.ori_w;
+
         startStop_flag.is_recording_route = true;
         limit_key.id = 0;
         limit_key.limit_from = 0.0;
@@ -1340,6 +1358,9 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
                     + " camera_guide_en:=" + guide_en
                     + " voice_control_en:=" + voice_control_en
                     + " obstacle_lim_num:=" + OBSTACLE_LIM_NUM
+                    + " max_line_vel:=" + ui->comboBox_Max_Vel->currentText()
+                    + " max_w_vel:=" + ui->comboBox_Max_Vel_2->currentText()
+                    + " lookahead_dist:=" + ui->comboBox_Max_Vel_3->currentText()
                     + " p_x:=" + QString::number(init_waypoint.pose.pos_x)
                     + " p_y:=" + QString::number(init_waypoint.pose.pos_y)
                     + " p_z:=" + QString::number(init_waypoint.pose.pos_z)
@@ -1698,12 +1719,27 @@ void MainWindow::on_pushButton_Next_Target_clicked()
     audio_name = RootPath + "/catkin_ws/src/amr_ros/resource/goto_next_target_" + user_language[ui->comboBox_language->currentText()] + ".mp3";
     if(start_guide)
     {
-        start_guide = false;
         audio_name = RootPath + "/catkin_ws/src/amr_ros/resource/greet_startup_navi_" + user_language[ui->comboBox_language->currentText()] + ".mp3";
     }
     QMetaObject::invokeMethod(m_worker, "setAudioFile", Qt::QueuedConnection, Q_ARG(QString, audio_name));
     QMetaObject::invokeMethod(m_worker, "setPlayMode", Qt::QueuedConnection, Q_ARG(bool, false));
     QMetaObject::invokeMethod(m_worker, "startPlaying", Qt::QueuedConnection);
+
+    if(start_guide)
+    {
+        QThread::sleep(10);
+        start_guide = false;
+    }
+
+    //init to calculate distance
+    last_point[0] = robot_cur_pose.pos_x;
+    last_point[1] = robot_cur_pose.pos_y;
+    last_point[2] = robot_cur_pose.pos_z;
+    last_point[3] = robot_cur_pose.ori_x;
+    last_point[4] = robot_cur_pose.ori_y;
+    last_point[5] = robot_cur_pose.ori_z;
+    last_point[6] = robot_cur_pose.ori_w;
+    odom_distance = 0.0;
 
     // request:pure_pursuit to reset path
     std_srvs::Empty srv;
@@ -1903,5 +1939,17 @@ void MainWindow::on_pushButton_Limit_Vel_clicked()
         limit_key.limit_to = 0;
     }
 
+}
+
+
+void MainWindow::on_comboBox_1_currentTextChanged(const QString &arg1)
+{
+    ui->comboBox_Route_From->setCurrentText(ui->comboBox_1->currentText());
+}
+
+
+void MainWindow::on_comboBox_2_currentTextChanged(const QString &arg1)
+{
+    ui->comboBox_Route_To->setCurrentText(ui->comboBox_2->currentText());
 }
 
