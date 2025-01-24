@@ -1,12 +1,13 @@
 <launch>
         <arg name="wheel_base" default="0.5" doc="wheelbase"/>
         <arg name="lookahead_distance" default="1.0" doc="lookahead distance"/>
-        <arg name="v_max" default="0.6" doc="run velocity"/>
+        <arg name="v_max" default="0.8" doc="run velocity"/>
         <arg name="w_max" default="0.8" doc="max rotational velocity"/>
 	<arg name="position_tolerance" default="0.1" doc="position tolerance"/>
         <arg name="orientation_tolerance" default="0.1" doc="orientation tolerance"/>
         <arg name="delta_vel" default="10" doc="steering angle velocity"/>
         <arg name="acc" default="0.1" doc="acceleration"/>
+        <arg name="dec" default="0.1" doc="deceleration"/>
         <arg name="jerk" default="1.0" doc="jerk"/>
         <arg name="delta_max" default="3.14" doc="steering angle limit"/>
 	<arg name="map_frame_id" default="map" doc="map frame id"/>
@@ -24,6 +25,7 @@
 		<param name="orientation_tolerance" value="$(arg orientation_tolerance)"/>
 		<param name="steering_angle_velocity" value="$(arg delta_vel)"/>
 		<param name="acceleration" value="$(arg acc)"/>
+                <param name="deceleration" value="$(arg dec)"/>
 		<param name="jerk" value="$(arg jerk)"/>
 		<param name="steering_angle_limit" value="$(arg delta_max)"/>
 		<param name="map_frame_id" value="$(arg map_frame_id)"/>

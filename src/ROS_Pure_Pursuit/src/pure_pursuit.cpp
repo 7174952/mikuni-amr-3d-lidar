@@ -7,6 +7,7 @@
 #include <iostream>
 #include <cmath>
 #include <algorithm>
+#include <vector>
 
 #include <ros/ros.h>
 #include <tf2_ros/transform_listener.h>
@@ -21,6 +22,7 @@
 #include <kdl/frames.hpp>
 #include <std_srvs/Empty.h>
 #include <std_msgs/Bool.h>
+#include <std_msgs/String.h>
 
 using std::string;
 
@@ -45,6 +47,9 @@ class PurePursuit
     //set direction
     void goal_orientation_control(const geometry_msgs::Pose& goal_pose, bool *orient_reached);
     bool reset_path_callback(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
+
+    void odomLimit_Callback(const std_msgs::String::ConstPtr& msg);
+    std::vector<std::string> split(const std::string& str, char delimiter);
     
   private:
     // Parameters
@@ -52,7 +57,7 @@ class PurePursuit
     double lookahead_distance_, position_tolerance_;
     double orientation_tolerance_;
     double v_max_, v_, w_max_;
-    double delta_, delta_vel_, acc_, jerk_, delta_max_;
+    double delta_, delta_vel_, acc_, dec_, jerk_, delta_max_;
     int idx_memory;
     unsigned idx_;
     bool goal_reached_, path_loaded_;
@@ -65,7 +70,7 @@ class PurePursuit
     
     // ROS
     ros::NodeHandle nh_, nh_private_;
-    ros::Subscriber sub_odom_, sub_path_;
+    ros::Subscriber sub_odom_, sub_path_, sub_odom_limit;
     ros::Publisher pub_vel_, pub_acker_, pub_marker_;
     tf2_ros::Buffer tf_buffer_;
     tf2_ros::TransformListener tf_listener_;
@@ -78,6 +83,12 @@ class PurePursuit
     ros::Publisher pub_goal_reached;
     bool orient_reached;
     bool init_orient_reached;
+
+    bool set_wait;
+    double wait_time;
+
+    double odom_distance;
+    double total_distance;
 
 
 };
@@ -95,6 +106,7 @@ PurePursuit::PurePursuit() : lookahead_distance_(1.0), v_max_(0.2), w_max_(1.0),
   nh_private_.getParam("orientation_tolerance",orientation_tolerance_);
   nh_private_.getParam("steering_angle_velocity", delta_vel_);
   nh_private_.getParam("acceleration", acc_);
+  nh_private_.getParam("deceleration", dec_);
   nh_private_.getParam("jerk", jerk_);
   nh_private_.getParam("steering_angle_limit", delta_max_);
   nh_private_.getParam("map_frame_id", map_frame_id_);
@@ -110,12 +122,14 @@ PurePursuit::PurePursuit() : lookahead_distance_(1.0), v_max_(0.2), w_max_(1.0),
   cmd_acker_.drive.acceleration = acc_;
   cmd_acker_.drive.jerk = jerk_;
 
-  v_ = v_max_;
+  v_ = 0;
   idx_memory = 0;
   path_loaded_ = false;
   
   sub_path_ = nh_.subscribe("/waypoints", 1, &PurePursuit::waypoints_listener, this);
   sub_odom_ = nh_.subscribe("/odom", 1, &PurePursuit::cmd_generator, this);
+  sub_odom_limit = nh_.subscribe("/odom_limit",1, &PurePursuit::odomLimit_Callback, this);
+
 
   pub_vel_ = nh_.advertise<geometry_msgs::Twist>("cmd_raw", 1);
   pub_acker_ = nh_.advertise<ackermann_msgs::AckermannDriveStamped>("cmd_acker", 1);
@@ -126,199 +140,237 @@ PurePursuit::PurePursuit() : lookahead_distance_(1.0), v_max_(0.2), w_max_(1.0),
   reset_path_en = false;
   orient_reached = false;
   init_orient_reached = false;
+  odom_distance = 0;
+  total_distance = 0;
+
+  set_wait = false;
+
 }
 
 void PurePursuit::cmd_generator(nav_msgs::Odometry odom)
 {
     odom_ = odom;
 
-  if (path_loaded_)
-  {
-    // Get the current pose
-    geometry_msgs::TransformStamped tf;
-    try
+    if (path_loaded_)
     {
-        if(init_orient_reached == false)
+        // Get the current pose
+        geometry_msgs::TransformStamped tf;
+        try
         {
-            idx_ = 0;
-        }
-        else
-        {
-          tf = tf_buffer_.lookupTransform(map_frame_id_, robot_frame_id_, ros::Time(0));
-          // Detetmine the waypoint to track on the basis of 1) current_pose 2) waypoints_info 3) lookahead_distance
-          for (idx_=idx_memory; idx_ < path_.poses.size(); idx_++)
-          {
-            if (distance(path_.poses[idx_].pose.position, tf.transform.translation) > lookahead_distance_)
+            if(init_orient_reached == false)
             {
-              KDL::Frame pose_offset = trans2base(path_.poses[idx_].pose, tf.transform);
-              lookahead_.transform.translation.x = std::isnan(pose_offset.p.x()) ? 0.0 : pose_offset.p.x();
-              lookahead_.transform.translation.y = std::isnan(pose_offset.p.y()) ? 0.0 : pose_offset.p.y();
-              lookahead_.transform.translation.z = std::isnan(pose_offset.p.z()) ? 0.0 : pose_offset.p.z();
-              pose_offset.M.GetQuaternion(lookahead_.transform.rotation.x, lookahead_.transform.rotation.y,
-                                          lookahead_.transform.rotation.z, lookahead_.transform.rotation.w);
-              idx_memory = idx_;
-              break;
+                idx_ = 0;
             }
-          }
+            else
+            {
+                tf = tf_buffer_.lookupTransform(map_frame_id_, robot_frame_id_, ros::Time(0));
+                // Detetmine the waypoint to track on the basis of 1) current_pose 2) waypoints_info 3) lookahead_distance
+                for (idx_=idx_memory; idx_ < path_.poses.size(); idx_++)
+                {
+                    if (distance(path_.poses[idx_].pose.position, tf.transform.translation) > lookahead_distance_)
+                    {
+                        KDL::Frame pose_offset = trans2base(path_.poses[idx_].pose, tf.transform);
+                        lookahead_.transform.translation.x = std::isnan(pose_offset.p.x()) ? 0.0 : pose_offset.p.x();
+                        lookahead_.transform.translation.y = std::isnan(pose_offset.p.y()) ? 0.0 : pose_offset.p.y();
+                        lookahead_.transform.translation.z = std::isnan(pose_offset.p.z()) ? 0.0 : pose_offset.p.z();
+                        pose_offset.M.GetQuaternion(lookahead_.transform.rotation.x, lookahead_.transform.rotation.y,
+                                                    lookahead_.transform.rotation.z, lookahead_.transform.rotation.w);
+                        idx_memory = idx_;
+                        break;
+                    }
+                }
+            }
+
+            // If approach the goal (last waypoint)
+            if (!path_.poses.empty() && idx_ >= path_.poses.size())
+            {
+                KDL::Frame goal_offset = trans2base(path_.poses.back().pose, tf.transform);
+
+                // Reach the goal
+                if (   ((goal_reached_ == false) && (fabs(goal_offset.p.x()) <= position_tolerance_))
+                    || ((goal_reached_ == true)  && (orient_reached == false)))
+                {
+                    goal_reached_ = true;
+
+                    geometry_msgs::Pose goal_pose = path_.poses.back().pose;
+                    goal_orientation_control(goal_pose, &orient_reached);
+                    if(orient_reached)
+                    {
+                        //reached required direction
+                        path_ = nav_msgs::Path(); // Reset the path
+                        std_msgs::Bool is_reached_goal;
+                        is_reached_goal.data = true;
+                        pub_goal_reached.publish(is_reached_goal);
+                    }
+                    else
+                    {
+                        return;
+                    }
+                }
+                // Not meet the position tolerance: extend the lookahead distance beyond the goal
+                else
+                {
+                    // Find the intersection between the circle of radius(lookahead_distance) centered at the current pose
+                    // and the line defined by the last waypoint
+                    double roll, pitch, yaw;
+                    goal_offset.M.GetRPY(roll, pitch, yaw);
+                    double k_end = tan(yaw); // Slope of line defined by the last waypoint
+                    double l_end = goal_offset.p.y() - k_end * goal_offset.p.x();
+                    double a = 1 + k_end * k_end;
+                    double b = 2 * l_end;
+                    double c = l_end * l_end - lookahead_distance_ * lookahead_distance_;
+                    double D = sqrt(b*b - 4*a*c);
+                    double x_ld = (-b + copysign(D,v_)) / (2*a);
+                    double y_ld = k_end * x_ld + l_end;
+
+                    lookahead_.transform.translation.x = std::isnan(x_ld) ? 0.0 : x_ld;
+                    lookahead_.transform.translation.y = std::isnan(y_ld) ? 0.0 : y_ld;
+                    lookahead_.transform.translation.z = std::isnan(goal_offset.p.z()) ? 0.0 : goal_offset.p.z();
+                    goal_offset.M.GetQuaternion(lookahead_.transform.rotation.x, lookahead_.transform.rotation.y,
+                                                lookahead_.transform.rotation.z, lookahead_.transform.rotation.w);
+                }
+            }
+
+            // Waypoint follower
+            if (!goal_reached_)
+            {
+                //Turn round before running
+                if((idx_ == 0) && (init_orient_reached == false))
+                {
+                    geometry_msgs::Pose goal_pose = path_.poses.front().pose;
+                    goal_orientation_control(goal_pose, &init_orient_reached);
+                    //wait for cart stable
+                    if(init_orient_reached && set_wait == false)
+                    {
+                        init_orient_reached = false;
+                        set_wait = true;
+                        wait_time = ros::Time::now().toSec();
+                    }
+
+                    if(set_wait)
+                    {
+                        if( ros::Time::now().toSec() - wait_time > 1.5)
+                        {
+                            init_orient_reached = true;
+                            set_wait = false;
+                            v_ = 0;
+                            odom_distance = 0;
+                            total_distance = 0;
+
+                        }
+                        else
+                        {
+                            init_orient_reached = false;
+                        }
+                    }
+
+                }
+                else
+                {
+                    //set speed up when startup
+                    if(odom_distance < 1.0)
+                    {
+                        v_ += acc_;
+                        v_ = std::min(v_, v_max_);
+                    }
+                    else if(odom_distance > (total_distance - 1.0)) //set speed down when near target
+                    {
+                        v_ -= dec_;
+                        v_ = std::max(0.3, v_);
+                    }
+
+                    double lateral_offset = lookahead_.transform.translation.y;
+                    cmd_vel_.angular.z = std::min(2*v_/lookahead_distance_*lookahead_distance_*lateral_offset, w_max_);
+                    // Desired Ackermann steering_angle
+                    cmd_acker_.drive.steering_angle = std::min(atan2(2*lateral_offset*wheel_base_, lookahead_distance_*lookahead_distance_), delta_max_);
+
+                    // Linear velocity
+                    cmd_vel_.linear.x = v_;
+                    cmd_acker_.drive.speed = v_;
+                    cmd_acker_.header.stamp = ros::Time::now();
+                }
+            }
+            // Reach the goal: stop the vehicle
+            else
+            {
+                if(reset_path_en)
+                {
+                    //restart
+                    idx_ = 0;
+                    idx_memory = 0;
+                    goal_reached_ = false;
+                    reset_path_en = false;
+                    orient_reached = false;
+                    init_orient_reached = false;
+                    std_msgs::Bool is_reached_goal;
+                    is_reached_goal.data = false;
+                    pub_goal_reached.publish(is_reached_goal);
+                }
+                else //Reset and repeate to run again
+                {
+                    cmd_vel_.linear.x = 0.00;
+                    cmd_vel_.angular.z = 0.00;
+
+                    cmd_acker_.header.stamp = ros::Time::now();
+                    cmd_acker_.drive.steering_angle = 0.00;
+                    cmd_acker_.drive.speed = 0.00;
+                }
+            }
+
+            // Publish the lookahead target transform.
+            lookahead_.header.stamp = ros::Time::now();
+            tf_broadcaster_.sendTransform(lookahead_);
+            // Publish the velocity command
+            cmd_vel_.angular.z = std::isnan(cmd_vel_.angular.z) ? 0.0 : cmd_vel_.angular.z;
+
+            pub_vel_.publish(cmd_vel_);
+            // Publish the ackerman_steering command
+            pub_acker_.publish(cmd_acker_);
+            // Publish the lookahead_marker for visualization
+            lookahead_marker_.header.frame_id = "lookahead";
+            lookahead_marker_.header.stamp = ros::Time::now();
+            lookahead_marker_.type = visualization_msgs::Marker::SPHERE;
+            lookahead_marker_.action = visualization_msgs::Marker::ADD;
+            lookahead_marker_.scale.x = 0.1;
+            lookahead_marker_.scale.y = 0.1;
+            lookahead_marker_.scale.z = 0.1;
+            lookahead_marker_.pose.orientation.x = 0.0;
+            lookahead_marker_.pose.orientation.y = 0.0;
+            lookahead_marker_.pose.orientation.z = 0.0;
+            lookahead_marker_.pose.orientation.w = 1.0;
+            lookahead_marker_.color.a = 1.0;
+            if (!goal_reached_)
+            {
+                lookahead_marker_.id = idx_;
+                lookahead_marker_.pose.position.x = path_.poses[idx_].pose.position.x;
+                lookahead_marker_.pose.position.y = path_.poses[idx_].pose.position.y;
+                lookahead_marker_.pose.position.z = path_.poses[idx_].pose.position.z;
+                lookahead_marker_.color.r = 0.0;
+                lookahead_marker_.color.g = 1.0;
+                lookahead_marker_.color.b = 0.0;
+                pub_marker_.publish(lookahead_marker_);
+            }
+            else
+            {
+                lookahead_marker_.id = idx_memory;
+                idx_memory += 1;
+                lookahead_marker_.pose.position.x = std::isnan(tf.transform.translation.x) ? 0.0 : tf.transform.translation.x;
+                lookahead_marker_.pose.position.y = std::isnan(tf.transform.translation.y) ? 0.0 : tf.transform.translation.y;
+                lookahead_marker_.pose.position.z = std::isnan(tf.transform.translation.z) ? 0.0 : tf.transform.translation.z;
+                lookahead_marker_.color.r = 1.0;
+                lookahead_marker_.color.g = 0.0;
+                lookahead_marker_.color.b = 0.0;
+                if (idx_memory%5 == 0)
+                {
+                    pub_marker_.publish(lookahead_marker_);
+                }
+            }
         }
-
-      // If approach the goal (last waypoint)
-      if (!path_.poses.empty() && idx_ >= path_.poses.size())
-      {
-        KDL::Frame goal_offset = trans2base(path_.poses.back().pose, tf.transform);
-
-        // Reach the goal
-        if (   ((goal_reached_ == false) && (fabs(goal_offset.p.x()) <= position_tolerance_))
-            || ((goal_reached_ == true)  && (orient_reached == false)))
+        catch (tf2::TransformException &ex)
         {
-          goal_reached_ = true;
-          geometry_msgs::Pose goal_pose = path_.poses.back().pose;
-          goal_orientation_control(goal_pose, &orient_reached);
-          if(orient_reached)
-          {
-            //reached required direction
-            path_ = nav_msgs::Path(); // Reset the path
-            std_msgs::Bool is_reached_goal;
-            is_reached_goal.data = true;
-            pub_goal_reached.publish(is_reached_goal);
-          }
-          else
-          {
-              return;
-          }
+            ROS_WARN_STREAM(ex.what());
         }
-        // Not meet the position tolerance: extend the lookahead distance beyond the goal
-        else
-        {
-          // Find the intersection between the circle of radius(lookahead_distance) centered at the current pose
-          // and the line defined by the last waypoint
-          double roll, pitch, yaw;
-          goal_offset.M.GetRPY(roll, pitch, yaw);
-          double k_end = tan(yaw); // Slope of line defined by the last waypoint
-          double l_end = goal_offset.p.y() - k_end * goal_offset.p.x();
-          double a = 1 + k_end * k_end;
-          double b = 2 * l_end;
-          double c = l_end * l_end - lookahead_distance_ * lookahead_distance_;
-          double D = sqrt(b*b - 4*a*c);
-          double x_ld = (-b + copysign(D,v_)) / (2*a);
-          double y_ld = k_end * x_ld + l_end;
-          
-          lookahead_.transform.translation.x = std::isnan(x_ld) ? 0.0 : x_ld;
-          lookahead_.transform.translation.y = std::isnan(y_ld) ? 0.0 : y_ld;
-          lookahead_.transform.translation.z = std::isnan(goal_offset.p.z()) ? 0.0 : goal_offset.p.z();
-          goal_offset.M.GetQuaternion(lookahead_.transform.rotation.x, lookahead_.transform.rotation.y,
-                                      lookahead_.transform.rotation.z, lookahead_.transform.rotation.w);
-        }
-      }
-
-      // Waypoint follower
-      if (!goal_reached_)
-      {
-        //Turn round before running
-        if((idx_ == 0) && (init_orient_reached == false))
-        {
-            geometry_msgs::Pose goal_pose = path_.poses.front().pose;
-            goal_orientation_control(goal_pose, &init_orient_reached);
-
-        }
-        else
-        {
-            v_ = copysign(v_max_, v_);
-
-            double lateral_offset = lookahead_.transform.translation.y;
-            cmd_vel_.angular.z = std::min(2*v_/lookahead_distance_*lookahead_distance_*lateral_offset, w_max_);
-
-            // Desired Ackermann steering_angle
-            cmd_acker_.drive.steering_angle = std::min(atan2(2*lateral_offset*wheel_base_, lookahead_distance_*lookahead_distance_), delta_max_);
-
-            // Linear velocity
-            cmd_vel_.linear.x = v_;
-            cmd_acker_.drive.speed = v_;
-            cmd_acker_.header.stamp = ros::Time::now();
-
-        }
-      }
-      // Reach the goal: stop the vehicle
-      else
-      {
-        if(reset_path_en)
-        {
-            //restart
-            idx_ = 0;
-            idx_memory = 0;
-            goal_reached_ = false;
-            reset_path_en = false;
-            orient_reached = false;
-            init_orient_reached = false;
-            std_msgs::Bool is_reached_goal;
-            is_reached_goal.data = false;
-            pub_goal_reached.publish(is_reached_goal);
-        }
-        else //Reset and repeate to run again
-        {
-            cmd_vel_.linear.x = 0.00;
-            cmd_vel_.angular.z = 0.00;
-
-            cmd_acker_.header.stamp = ros::Time::now();
-            cmd_acker_.drive.steering_angle = 0.00;
-            cmd_acker_.drive.speed = 0.00;
-        }
-      }
-
-      // Publish the lookahead target transform.
-      lookahead_.header.stamp = ros::Time::now();
-      tf_broadcaster_.sendTransform(lookahead_);
-      // Publish the velocity command
-      cmd_vel_.angular.z = std::isnan(cmd_vel_.angular.z) ? 0.0 : cmd_vel_.angular.z;
-
-      pub_vel_.publish(cmd_vel_);
-      // Publish the ackerman_steering command
-      pub_acker_.publish(cmd_acker_);
-      // Publish the lookahead_marker for visualization
-      lookahead_marker_.header.frame_id = "lookahead";
-      lookahead_marker_.header.stamp = ros::Time::now();
-      lookahead_marker_.type = visualization_msgs::Marker::SPHERE;
-      lookahead_marker_.action = visualization_msgs::Marker::ADD;
-      lookahead_marker_.scale.x = 0.1;
-      lookahead_marker_.scale.y = 0.1;
-      lookahead_marker_.scale.z = 0.1;
-      lookahead_marker_.pose.orientation.x = 0.0;
-      lookahead_marker_.pose.orientation.y = 0.0;
-      lookahead_marker_.pose.orientation.z = 0.0;
-      lookahead_marker_.pose.orientation.w = 1.0;
-      lookahead_marker_.color.a = 1.0;
-      if (!goal_reached_)
-      {
-        lookahead_marker_.id = idx_;
-        lookahead_marker_.pose.position.x = path_.poses[idx_].pose.position.x;
-        lookahead_marker_.pose.position.y = path_.poses[idx_].pose.position.y;
-        lookahead_marker_.pose.position.z = path_.poses[idx_].pose.position.z;
-        lookahead_marker_.color.r = 0.0;
-        lookahead_marker_.color.g = 1.0;
-        lookahead_marker_.color.b = 0.0;
-        pub_marker_.publish(lookahead_marker_);
-      }
-      else
-      {
-        lookahead_marker_.id = idx_memory;
-        idx_memory += 1;
-        lookahead_marker_.pose.position.x = std::isnan(tf.transform.translation.x) ? 0.0 : tf.transform.translation.x;
-        lookahead_marker_.pose.position.y = std::isnan(tf.transform.translation.y) ? 0.0 : tf.transform.translation.y;
-        lookahead_marker_.pose.position.z = std::isnan(tf.transform.translation.z) ? 0.0 : tf.transform.translation.z;
-        lookahead_marker_.color.r = 1.0;
-        lookahead_marker_.color.g = 0.0;
-        lookahead_marker_.color.b = 0.0;
-        if (idx_memory%5 == 0)
-        {
-          pub_marker_.publish(lookahead_marker_); 
-        }
-      }
     }
-    catch (tf2::TransformException &ex)
-    {
-      ROS_WARN_STREAM(ex.what());
-    }
-  }
 }
 
 void PurePursuit::goal_orientation_control(const geometry_msgs::Pose& goal_pose, bool *orient_reached)
@@ -341,7 +393,7 @@ void PurePursuit::goal_orientation_control(const geometry_msgs::Pose& goal_pose,
     {
         cmd_vel_.linear.x = 0.0; // Stop linear motion
         cmd_vel_.angular.z = yaw_error * 1.0; // Proportional control for orientation
-        cmd_vel_.angular.z = std::min(w_max_, std::abs(cmd_vel_.angular.z));
+        cmd_vel_.angular.z = std::min(0.8, std::abs(cmd_vel_.angular.z));
         if(yaw_error < 0)
         {
             cmd_vel_.angular.z = cmd_vel_.angular.z * (-1);
@@ -359,6 +411,41 @@ void PurePursuit::goal_orientation_control(const geometry_msgs::Pose& goal_pose,
     pub_vel_.publish(cmd_vel_);
 }
 
+std::vector<std::string> PurePursuit::split(const std::string& str, char delimiter)
+{
+    std::vector<std::string> result;
+    std::size_t start = 0;
+    std::size_t pos = 0;
+
+    while ((pos = str.find(delimiter, start)) != std::string::npos)
+    {
+        // 提取 start 到 pos 之间的子串
+        if(pos != start)
+        {
+            result.push_back(str.substr(start, pos - start));
+        }
+        // 更新起始位置
+        start = pos + 1;
+    }
+
+    // 处理最后一个分隔符后面的子串
+    if(start < str.size())
+    {
+        result.push_back(str.substr(start));
+    }
+
+    return result;
+}
+
+void PurePursuit::odomLimit_Callback(const std_msgs::String::ConstPtr& msg)
+{
+     std::vector<std::string> odom_limit = split(msg->data, ';');
+
+    odom_distance = std::stod(split(odom_limit.at(0),':').at(1));
+    total_distance = std::stod(split(odom_limit.at(1),':').at(1));
+
+}
+
 bool PurePursuit::reset_path_callback(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
 {
     if(goal_reached_)
@@ -372,49 +459,49 @@ bool PurePursuit::reset_path_callback(std_srvs::Empty::Request &req, std_srvs::E
 
 void PurePursuit::waypoints_listener(nav_msgs::Path new_path)
 { 
-  if (new_path.header.frame_id == map_frame_id_)
-  {
-    path_ = new_path;
-    idx_ = 0;
-    if (new_path.poses.size() > 0)
+    if (new_path.header.frame_id == map_frame_id_)
     {
-      std::cout << "Received Waypoints" << std::endl;
-      path_loaded_ = true;
+        path_ = new_path;
+        idx_ = 0;
+        if (new_path.poses.size() > 0)
+        {
+            std::cout << "Received Waypoints" << std::endl;
+            path_loaded_ = true;
+        }
+        else
+        {
+            ROS_WARN_STREAM("Received empty waypoint!");
+        }
     }
     else
     {
-      ROS_WARN_STREAM("Received empty waypoint!");
+        ROS_WARN_STREAM("The waypoints must be published in the " << map_frame_id_ << " frame! Ignoring path in " << new_path.header.frame_id << " frame!");
     }
-  }
-  else
-  {
-    ROS_WARN_STREAM("The waypoints must be published in the " << map_frame_id_ << " frame! Ignoring path in " << new_path.header.frame_id << " frame!");
-  }
 }
 
 KDL::Frame PurePursuit::trans2base(const geometry_msgs::Pose& pose, const geometry_msgs::Transform& tf)
 {
-  // Pose in map
-  KDL::Frame F_map_pose(KDL::Rotation::Quaternion(pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w),
-                        KDL::Vector(pose.position.x, pose.position.y, pose.position.z));
-  // base_link in map
-  KDL::Frame F_map_tf(KDL::Rotation::Quaternion(tf.rotation.x, tf.rotation.y, tf.rotation.z, tf.rotation.w),
-                      KDL::Vector(tf.translation.x, tf.translation.y, tf.translation.z));
+    // Pose in map
+    KDL::Frame F_map_pose(KDL::Rotation::Quaternion(pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w),
+                            KDL::Vector(pose.position.x, pose.position.y, pose.position.z));
+    // base_link in map
+    KDL::Frame F_map_tf(KDL::Rotation::Quaternion(tf.rotation.x, tf.rotation.y, tf.rotation.z, tf.rotation.w),
+                        KDL::Vector(tf.translation.x, tf.translation.y, tf.translation.z));
                       
-  return F_map_tf.Inverse()*F_map_pose;
+    return F_map_tf.Inverse()*F_map_pose;
 }
 
 void PurePursuit::run()
 {
-  ros::spin();
+    ros::spin();
 }
 
 int main(int argc, char**argv)
 {
-  ros::init(argc, argv, "pure_pursuit");
+    ros::init(argc, argv, "pure_pursuit");
 
-  PurePursuit controller;
-  controller.run();
+    PurePursuit controller;
+    controller.run();
 
-  return 0;
+    return 0;
 }
