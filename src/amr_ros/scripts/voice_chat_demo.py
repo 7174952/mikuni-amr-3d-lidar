@@ -61,16 +61,21 @@ voice_resp: Dict[str, Dict[str,str]] = {
     "ja": {"resp_wakeup": audo_path + "resp_wakeup_ja.mp3",
            "resp_start_to_run": audo_path + "resp_start_to_run_ja.mp3",
            "resp_stop_and_wait": audo_path + "resp_stop_and_wait_ja.mp3",
-           "resp_unknown_cmd": audo_path + "resp_unknown_cmd_ja.mp3"},
+           "resp_chat_over": audo_path + "resp_chat_over_ja.mp3"},
     "zh": {"resp_wakeup": audo_path + "resp_wakeup_zh.mp3",
            "resp_start_to_run": audo_path + "resp_start_to_run_zh.mp3",
            "resp_stop_and_wait": audo_path + "resp_stop_and_wait_zh.mp3",
-           "resp_unknown_cmd": audo_path + "resp_unknown_cmd_zh.mp3"},
+           "resp_chat_over": audo_path + "resp_chat_over_zh.mp3"},
 }
 
 wakeup_dict: Dict[str, List[str]] = {
-    "ja": ["みくろ","ミクロ","ピクロ","ぴくろ","ビクロ","びくろ","リクロ","りくろ","案内ロボ","あんないろぼ"],
-    "zh": ["小度", "小杜","小肚","小渡"],
+    "ja": ["ミク","みく","ミック","みっく","ミクロボ","みくろぼ"],
+    "zh": ["小度", "小杜","小肚","小渡","小兔"],
+}
+
+chat_over_dict: Dict[str, List[str]] = {
+    "ja": ["会話終了","会話中止","ストップ"],
+    "zh": ["停止对话","结束对话","对话结束","会话结束","结束会话","终止对话","中断对话"],
 }
 
 #save log
@@ -201,8 +206,9 @@ def execute_command(command):
     执行控制指令，并使用TTS报告结果
     """
     #play music
-    start_robot = ["开始","前进","出发","走っ","はしっ","進ん","進め","出発","しゅっぱつ","すすん","すすめ","スタート"]
-    stop_robot = ["停车","停止","ストップ","止まっ","とまっ","止まれ","とまれ","待っ","まっ"]
+    start_robot = ["走っ","はしっ","スタート","走れ","はしれ","動け","うごけ","开始","前进","出发"]
+    stop_robot = ["止まっ","とまっ","ストップ","止まれ","とまれ","待て","まて","待っ","まっ","停车"]
+
     resp_cmd = ""
     if command['action'] in start_robot:
         response = voice_resp[language]["resp_start_to_run"]
@@ -265,6 +271,16 @@ def parser_worker():
 
         # 在此处添加解析逻辑
         if voice_mode == "chat":
+            #检查是否要结束对话
+            if chat_start == True or is_continue_chat == True:
+                for word in chat_over_dict[language]:
+                    if word in text:
+                        chat_start = False
+                        is_continue_chat = False
+                        tts_stop = True
+                        playsound(voice_resp[language]["resp_chat_over"])
+                        break
+
             #检查是否唤醒词
             for word in wakeup_dict[language]:
                 if word in text:
