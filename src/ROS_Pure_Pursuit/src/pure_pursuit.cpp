@@ -273,7 +273,7 @@ void PurePursuit::cmd_generator(nav_msgs::Odometry odom)
                         v_ += acc_;
                         v_ = std::min(v_, v_max_);
                     }
-                    else if(odom_distance > (total_distance - 1.0)) //set speed down when near target
+                    else if(odom_distance > (total_distance - 1.5)) //set speed down when near target
                     {
                         v_ -= dec_;
                         v_ = std::max(0.3, v_);
