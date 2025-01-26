@@ -46,6 +46,8 @@ int32_t obstacle_lim = 0;
 double robot_width_size;
 double robot_width_tolerance;
 
+double set_robot_stop;
+double obst_speed_rate = 0; //0.0~1.0
 
 //Control speed by the distance of person behind of cart
 struct Speed_Ctrl
@@ -57,6 +59,8 @@ struct Speed_Ctrl
     double threshHold;
     double startThreshHold;
     double guideless_distance;
+    double guideSpeedRate;  // 当前实际速度(或速度比例)
+    bool runStatus;
 };
 Speed_Ctrl speed_ctrl;
 double currentDistance;
@@ -115,18 +119,17 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr unslice(pcl::PointCloud<pcl::PointXYZ>::Ptr&
 
 double calculateSpeedReduction()
 {
-    double speed_rate = 0;
-
     if (obstacle_points_num > obstacle_lim)
     {
-        speed_rate = 0;
+        obst_speed_rate -= 0.25;
+        obst_speed_rate = std::max(obst_speed_rate,0.0);
     }
     else
     {
-        speed_rate = 1.0;
+        obst_speed_rate = 1.0;
     }
 
-    return speed_rate;
+    return obst_speed_rate;
 }
 
 void voiceCtrlCallback(const std_msgs::String::ConstPtr& cmd)
@@ -246,7 +249,7 @@ void cloudCB(const sensor_msgs::PointCloud2ConstPtr& input)
     pass.filter(*cloud_input);
     double obstal_width = robot_width_size + (odom_limit_status.limit_on ? odom_limit_status.obst_tolerance : robot_width_tolerance) * 2;
 
-    const double ratio = (odom_limit_status.limit_on && odom_limit_status.obst_tolerance < 0.1) ? 3.0 : 2.0;
+    const double ratio = (odom_limit_status.limit_on && odom_limit_status.obst_tolerance < 0.03) ? 3.0 : 2.0;
 
     double max_filter_dist = 0;
 
@@ -331,6 +334,9 @@ void cloudCB(const sensor_msgs::PointCloud2ConstPtr& input)
 
 void cmdrawCallback(const geometry_msgs::Twist::ConstPtr& msg)
 {
+    static int stopDelayCounter = 0;         // 停止延时计数器
+    const int STOP_DELAY = 15;               // 假设主循环 10Hz，延时 1 秒
+
     //update speed cmd by
     geometry_msgs::Twist cmd_vel;
 
@@ -352,19 +358,113 @@ void cmdrawCallback(const geometry_msgs::Twist::ConstPtr& msg)
         linear_velocity = cmd_vel.linear.x;
     }
 
-    double guide_speed_rate = 1.0;
+    // double guide_speed_rate = 1.0;
+    // 取出/使用上次的速度值(保存在 speed_ctrl 里)
+    double guide_speed_rate = speed_ctrl.guideSpeedRate;
+    bool   run_status       = speed_ctrl.runStatus;
+
 
     if(speed_ctrl.guide_enable)
     {
-        bool run_status = true;
+        // bool run_status = true;
 
         if( (odom_limit_status.is_front_careless && (odom_limit_status.odom_distance < speed_ctrl.guideless_distance)) //when start to run
          || (odom_limit_status.is_end_careless && (odom_limit_status.odom_distance > (odom_limit_status.total_distance - speed_ctrl.guideless_distance)))) //when near target
         {
             //do nothing
+            run_status = true;
         }
         else
         {
+#if 1
+
+            if (person_num > 0)
+            {
+                // 如果还在“停止延时计数”当中，就必须强制保持停止，不允许重启
+                if (stopDelayCounter > 0)
+                {
+                    // 这里进入延时滤波阶段：不计算新的 rate，不启动
+                    stopDelayCounter--;
+
+                    guide_speed_rate = 0.0;  // 强制速度为 0
+                    run_status = false;
+
+                }
+                else
+                {
+                    // 未处于延时停止阶段，则正常计算 rate
+                    double dist_error = (speed_ctrl.stopDistance - speed_ctrl.startThreshHold) - currentDistance;
+                    double rate = dist_error / (speed_ctrl.stopDistance - speed_ctrl.idealDistance);
+
+                     // rate < 0：需要停止并启动延时滤波
+                    if (rate <= 0.0)
+                    {
+                        // 需要停止，但这次我们不立即设速度=0，而是“逐周期减速”
+                        // 如果当前速度还>0.0，就缓慢减 0.1
+                        if (guide_speed_rate > 0.0)
+                        {
+                            guide_speed_rate -= 0.1; // 每次减 0.1
+                            if (guide_speed_rate < 0.0)
+                            {
+                                guide_speed_rate = 0.0; // 最终不能为负
+                            }
+                            run_status = true;
+                        }
+                        else
+                        {
+                            // 速度已经为 0，则进入延时停滞阶段
+                            guide_speed_rate = 0.0;
+                            run_status       = false;
+
+                            // 重置 startThreshHold
+                            speed_ctrl.startThreshHold = speed_ctrl.threshHold;
+
+                            // 启动延时计数
+                            stopDelayCounter = STOP_DELAY;
+                        }
+                    }
+                    else //rate > 0
+                    {
+                        // 限幅到 [0,1]
+                        if (rate > 1.0)
+                        {
+                            rate = 1.0;
+                        }
+
+                        guide_speed_rate = speed_ctrl.kp * rate;
+                        // rate >= 0：正常跑
+                        speed_ctrl.startThreshHold = 0.0;
+                        run_status = true;
+                    }
+                }
+            }
+            else // person_num == 0
+            {
+                // (C) person_num == 0, 无人 => 也要减速到 0
+                if (guide_speed_rate > 0.0)
+                {
+                    guide_speed_rate -= 0.1;
+                    if (guide_speed_rate < 0.0) {
+                        guide_speed_rate = 0.0;
+                    }
+                    run_status = true;
+                }
+                else
+                {
+                    // 一旦减为 0，进入延时
+                    guide_speed_rate = 0.0;
+                    run_status       = false;
+                    stopDelayCounter = STOP_DELAY;
+
+                }
+
+            }
+
+            // 将本次结果写回 speed_ctrl
+            speed_ctrl.guideSpeedRate = guide_speed_rate;
+            speed_ctrl.runStatus      = run_status;
+
+#else
             if(person_num > 0)
             {
                 double dist_error = (speed_ctrl.stopDistance - speed_ctrl.startThreshHold) - currentDistance;
@@ -375,30 +475,28 @@ void cmdrawCallback(const geometry_msgs::Twist::ConstPtr& msg)
                     speed_ctrl.startThreshHold = speed_ctrl.threshHold;
                     run_status = false;
                 }
-                else
+                else //rate > 0
                 {
                     speed_ctrl.startThreshHold = 0.0;
-                    if(rate < 0.1)
-                    {
-                        rate = 0;
-                        run_status = false;
-                    }
+                    run_status = true;
                 }
 
                 if(rate > 1)
                 {
                     rate = 1;
                 }
-
                 guide_speed_rate = speed_ctrl.kp * rate;
+                last_rate = guide_speed_rate;
 
                 qDebug() << "currentDistance:" << currentDistance << "dist_error:" << dist_error << "rate:" << guide_speed_rate << "\n";
             }
-            else //person_num == 0, still running
+            else //person_num == 0, stop
             {
                 guide_speed_rate = 0.0;
-                run_status = false;
+                // run_status = false;
+
             }
+#endif
         }
 
         std_msgs::String camera_ctrl_msg;
@@ -465,6 +563,8 @@ int main (int argc, char** argv)
     }
     speed_ctrl.guide_enable = false;
     speed_ctrl.startThreshHold = 0;
+    speed_ctrl.guideSpeedRate = 1.0;
+    speed_ctrl.runStatus = true;
     nh.param("guide_enable", speed_ctrl.guide_enable, false);
     nh.param("idealDistance", speed_ctrl.idealDistance, 2.0);
     nh.param("stopDistance", speed_ctrl.stopDistance, 4.0);
