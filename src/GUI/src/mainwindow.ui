@@ -1256,6 +1256,11 @@ background-color: rgb(170, 255, 255);</string>
        <string>rdc</string>
       </property>
      </item>
+     <item>
+      <property name="text">
+       <string>charge</string>
+      </property>
+     </item>
     </widget>
     <widget class="QComboBox" name="comboBox_2">
      <property name="geometry">
@@ -1284,6 +1289,11 @@ background-color: rgb(170, 255, 255);</string>
      <item>
       <property name="text">
        <string>rdc</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>charge</string>
       </property>
      </item>
     </widget>
