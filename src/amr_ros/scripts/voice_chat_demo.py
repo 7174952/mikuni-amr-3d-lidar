@@ -42,7 +42,7 @@ language = ""
 nlp = spacy.load("ja_core_news_md")
 voice_mode = "chat"  # Initialize voice mode variable
 tts_stop = False
-MAX_CONTINUE_SEC = 5000 #ms
+MAX_CONTINUE_SEC = 2000 #5000 #ms
 
 # 录音状态
 in_speech = False
@@ -207,7 +207,9 @@ def execute_command(command):
     """
     #play music
     start_robot = ["走っ","はしっ","スタート","走れ","はしれ","動け","うごけ","开始","前进","出发"]
+    # stop_robot = ["止まっ","とまっ","ストップ","止まれ","とまれ","停车"]
     stop_robot = ["止まっ","とまっ","ストップ","止まれ","とまれ","待て","まて","待っ","まっ","停车"]
+
 
     resp_cmd = ""
     if command['action'] in start_robot:
