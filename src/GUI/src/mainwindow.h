@@ -306,10 +306,6 @@ private slots:
     // 在 Widget 的头文件中声明一个槽函数
     void onPlaybackStopped();
 
-    void on_comboBox_1_currentTextChanged(const QString &arg1);
-
-    void on_comboBox_2_currentTextChanged(const QString &arg1);
-
 private:
     void writeSettings();
     void readSettings();

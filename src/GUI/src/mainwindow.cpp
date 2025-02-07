@@ -238,7 +238,6 @@ MainWindow::MainWindow(QWidget *parent)
     is_waiting_obst_play = false;
     is_waiting_camera_play = false;
 
-    //debug_ryu
     if (!m_thread->isRunning())
     {
         m_thread->start();
@@ -318,9 +317,6 @@ void MainWindow::writeSettings()
      settings.setValue("ControlEnable", ui->checkBox_Voice_Control_En->isChecked());
      settings.setValue("userLanguage", ui->comboBox_language->currentText());
      settings.setValue("MaxVel", ui->comboBox_Max_Vel->currentText());
-     settings.setValue("MaxWVel", ui->comboBox_Max_Vel_2->currentText());
-     settings.setValue("LookAhead", ui->comboBox_Max_Vel_3->currentText());
-
 
 }
 
@@ -345,8 +341,6 @@ void MainWindow::readSettings()
         ui->comboBox_language->addItem(str);
     ui->comboBox_language->setCurrentText(settings.value("userLanguage","English").toString());
     ui->comboBox_Max_Vel->setCurrentText(settings.value("MaxVel", "0.6").toString());
-    ui->comboBox_Max_Vel_2->setCurrentText(settings.value("MaxWVel", "0.8").toString());
-    ui->comboBox_Max_Vel_3->setCurrentText(settings.value("LookAhead", "1.0").toString());
 
 }
 void MainWindow::initWaypoints()
@@ -691,11 +685,6 @@ void MainWindow::Odometry_CallBack(const nav_msgs::Odometry& odom)
                             + "is_end_careless:" + (navi_route_status.is_end_careless == "true" ? "1" : "0");
 
         pub_odom_limit.publish(odom_limit_msg);
-
-        //debug_ryu,20250123
-        ui->textEdit_debug_info->setText("Navi Route:" + navi_route_status.sub_route);
-        ui->textEdit_debug_info->append("Total distance(m):" + QString::number(odom_limit_status.total_distance,'f',2));
-        ui->textEdit_debug_info->append("current distance(m):" + QString::number(odom_limit_status.odom_distance,'f',2));
     }
 }
 
@@ -1359,8 +1348,6 @@ void MainWindow::on_pushButton_Navi_StartUp_clicked()
                     + " voice_control_en:=" + voice_control_en
                     + " obstacle_lim_num:=" + OBSTACLE_LIM_NUM
                     + " max_line_vel:=" + ui->comboBox_Max_Vel->currentText()
-                    + " max_w_vel:=" + ui->comboBox_Max_Vel_2->currentText()
-                    + " lookahead_dist:=" + ui->comboBox_Max_Vel_3->currentText()
                     + " p_x:=" + QString::number(init_waypoint.pose.pos_x)
                     + " p_y:=" + QString::number(init_waypoint.pose.pos_y)
                     + " p_z:=" + QString::number(init_waypoint.pose.pos_z)
@@ -1939,17 +1926,5 @@ void MainWindow::on_pushButton_Limit_Vel_clicked()
         limit_key.limit_to = 0;
     }
 
-}
-
-
-void MainWindow::on_comboBox_1_currentTextChanged(const QString &arg1)
-{
-    ui->comboBox_Route_From->setCurrentText(ui->comboBox_1->currentText());
-}
-
-
-void MainWindow::on_comboBox_2_currentTextChanged(const QString &arg1)
-{
-    ui->comboBox_Route_To->setCurrentText(ui->comboBox_2->currentText());
 }
 
